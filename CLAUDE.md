@@ -18,6 +18,7 @@
 ## 설계 문서
 
 - 설계 문서: `docs/DESIGN.md`
+- 학습 가이드: `docs/STUDY_GUIDE.md`
 - 성능 측정 결과: `docs/PERF_RESULT.md` (3차 구현 후 작성)
 
 ## 패키지 구조
@@ -39,6 +40,12 @@ src/main/java/com/concert/booking/
 └── common/          # JWT, 예외 처리, 분산 락 유틸
 ```
 
+## 구현 현황
+
+- 1차 MVP (비관적 락): 완료 — Entity, JWT 인증, 콘서트 CRUD, 예매(SELECT FOR UPDATE), 결제, 통합 테스트
+- 2차 (낙관적 락): 미구현
+- 3차 (Redis 분산 락 + 대기열 + Kafka): 미구현
+
 ## 빌드 / 실행
 
 ```bash
@@ -48,7 +55,7 @@ docker compose up -d
 # 애플리케이션 빌드 및 실행
 ./gradlew bootRun
 
-# 테스트 (Testcontainers로 PostgreSQL, Redis, Kafka 자동 구동)
+# 테스트 (Testcontainers로 PostgreSQL 자동 구동)
 ./gradlew test
 ```
 
