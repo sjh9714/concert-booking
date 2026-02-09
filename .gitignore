@@ -19,3 +19,6 @@ Thumbs.db
 
 # Test
 /test-results/
+
+# k6 results
+k6/results/

@@ -29,7 +29,7 @@ services:
       retries: 5
 
   kafka:
-    image: apache/kafka:3.9.0
+    image: confluentinc/cp-kafka:7.6.0
     container_name: concert-kafka
     ports:
       - "9092:9092"
@@ -48,7 +48,7 @@ services:
       KAFKA_NUM_PARTITIONS: 3
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 5

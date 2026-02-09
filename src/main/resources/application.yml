@@ -35,6 +35,9 @@ spring:
 server:
   port: 8080
 
+reservation:
+  strategy: pessimistic  # pessimistic | optimistic | distributed
+
 jwt:
   secret: local-dev-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm
   expiration: 3600000

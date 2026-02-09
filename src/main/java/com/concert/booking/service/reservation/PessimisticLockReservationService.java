@@ -12,7 +12,6 @@ import com.concert.booking.event.ReservationCancelledEvent;
 import com.concert.booking.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +21,6 @@ import java.util.List;
 
 @Slf4j
 @Service
-@Primary
 @RequiredArgsConstructor
 public class PessimisticLockReservationService implements ReservationService {
 
@@ -41,7 +39,8 @@ public class PessimisticLockReservationService implements ReservationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        ConcertSchedule schedule = concertScheduleRepository.findById(request.scheduleId())
+        // 스케줄도 비관적 락으로 조회 (availableSeats 동시 수정 방지)
+        ConcertSchedule schedule = concertScheduleRepository.findByIdForUpdate(request.scheduleId())
                 .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
 
         // 데드락 방지: 좌석 ID 정렬

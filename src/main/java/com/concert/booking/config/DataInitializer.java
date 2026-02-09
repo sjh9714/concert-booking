@@ -1,5 +1,6 @@
 package com.concert.booking.config;
 
+import com.concert.booking.common.util.RedisKeyUtil;
 import com.concert.booking.domain.Concert;
 import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.Seat;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class DataInitializer implements ApplicationRunner {
     private final ConcertRepository concertRepository;
     private final ConcertScheduleRepository concertScheduleRepository;
     private final SeatRepository seatRepository;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Override
     @Transactional
@@ -85,5 +88,11 @@ public class DataInitializer implements ApplicationRunner {
         }
 
         seatRepository.saveAll(seats);
+
+        // Redis 재고 초기화 (분산 락 전략용)
+        redisTemplate.opsForValue().set(
+                RedisKeyUtil.stockKey(schedule.getId()),
+                String.valueOf(totalSeats)
+        );
     }
 }

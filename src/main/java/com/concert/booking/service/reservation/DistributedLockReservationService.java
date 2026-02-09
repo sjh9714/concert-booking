@@ -79,7 +79,7 @@ public class DistributedLockReservationService implements ReservationService {
                     User user = userRepository.findById(userId)
                             .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-                    ConcertSchedule schedule = concertScheduleRepository.findById(request.scheduleId())
+                    ConcertSchedule schedule = concertScheduleRepository.findByIdForUpdate(request.scheduleId())
                             .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
 
                     // 락 없는 일반 SELECT + All-or-Nothing 검증

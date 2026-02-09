@@ -5,6 +5,7 @@ import com.concert.booking.domain.SeatStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,4 +25,9 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
     // 낙관적 락: 락 없이 AVAILABLE 좌석 조회 (커밋 시 @Version으로 충돌 감지)
     @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")
     List<Seat> findAllByIdInAndAvailable(@Param("seatIds") List<Long> seatIds);
+
+    @Modifying
+    @Query(nativeQuery = true,
+            value = "UPDATE seats SET status = 'AVAILABLE', version = 0 WHERE schedule_id = :scheduleId")
+    void resetSeatsByScheduleId(@Param("scheduleId") Long scheduleId);
 }

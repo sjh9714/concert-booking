@@ -20,7 +20,7 @@
 
 - 설계 문서: `docs/DESIGN.md`
 - 학습 가이드: `docs/STUDY_GUIDE.md`
-- 성능 측정 결과: `docs/PERF_RESULT.md` (3차 구현 후 작성)
+- 성능 측정 결과: `docs/PERF_RESULT.md` (k6 부하 테스트 완료)
 
 ## 패키지 구조
 
@@ -46,6 +46,7 @@ src/main/java/com/concert/booking/
 - 1차 MVP (비관적 락): 완료 — Entity, JWT 인증, 콘서트 CRUD, 예매(SELECT FOR UPDATE), 결제, 통합 테스트
 - 2차 (낙관적 락): 완료 — @Version + Spring Retry(@Retryable), 낙관적 락 동시성 테스트
 - 3차 (Redis 분산 락 + 대기열 + Kafka): 완료 — Redisson 분산 락, Redis Sorted Set 대기열 + SSE, Kafka 이벤트(결제완료/취소), ShedLock 만료 스케줄러, 통합 테스트
+- k6 부하 테스트: 완료 — 3가지 전략 × 3시나리오 성능 비교, PERF_RESULT.md 작성
 
 ## 빌드 / 실행
 
@@ -87,6 +88,9 @@ docker compose up -d
 ### 결제
 - `POST /api/payments` — 결제 요청
 - `GET /api/payments/{id}` — 결제 상세
+
+### 관리
+- `POST /api/admin/reset` — 테스트 데이터 리셋 (k6용)
 
 ## 핵심 설계 결정
 
