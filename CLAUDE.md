@@ -12,6 +12,7 @@
 - SSE (대기열 실시간 알림)
 - Apache Kafka (KRaft 모드, 예매 이벤트)
 - Docker Compose
+- Spring Retry (낙관적 락 재시도)
 - ShedLock (스케줄러 중복 실행 방지)
 - Testcontainers, k6 (통합 테스트, 부하 테스트)
 
@@ -43,7 +44,7 @@ src/main/java/com/concert/booking/
 ## 구현 현황
 
 - 1차 MVP (비관적 락): 완료 — Entity, JWT 인증, 콘서트 CRUD, 예매(SELECT FOR UPDATE), 결제, 통합 테스트
-- 2차 (낙관적 락): 미구현
+- 2차 (낙관적 락): 완료 — @Version + Spring Retry(@Retryable), 낙관적 락 동시성 테스트
 - 3차 (Redis 분산 락 + 대기열 + Kafka): 미구현
 
 ## 빌드 / 실행

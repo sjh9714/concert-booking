@@ -37,6 +37,10 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
+    // Spring Retry
+    implementation("org.springframework.retry:spring-retry")
+    implementation("org.springframework:spring-aspects")
+
     // ShedLock
     implementation("net.javacrumbs.shedlock:shedlock-spring:6.2.0")
     implementation("net.javacrumbs.shedlock:shedlock-provider-redis-spring:6.2.0")

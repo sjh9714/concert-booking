@@ -20,4 +20,8 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")
     List<Seat> findAllByIdInAndAvailableForUpdate(@Param("seatIds") List<Long> seatIds);
+
+    // 낙관적 락: 락 없이 AVAILABLE 좌석 조회 (커밋 시 @Version으로 충돌 감지)
+    @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")
+    List<Seat> findAllByIdInAndAvailable(@Param("seatIds") List<Long> seatIds);
 }

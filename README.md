@@ -104,5 +104,5 @@ docker compose up -d
 ## 문서
 
 - [설계 문서](docs/DESIGN.md) — ERD, API, 동시성 전략, 대기열, Kafka, ADR
-- [학습 가이드](docs/STUDY_GUIDE.md) — 프로젝트 전체 코드 해설 (비관적 락, JWT, 상태 머신, 동시성 테스트 등)
+- [학습 가이드](docs/STUDY_GUIDE.md) — 프로젝트 전체 코드 해설 (비관적/낙관적 락, JWT, 상태 머신, 전략 패턴, Spring Retry, 동시성 테스트 등)
 - [성능 측정 결과](docs/PERF_RESULT.md) — 3가지 락 전략 비교 (구현 후 작성)
