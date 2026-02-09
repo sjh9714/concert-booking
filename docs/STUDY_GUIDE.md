@@ -29,15 +29,21 @@
 15. [비관적 락 vs 낙관적 락 — 완전 비교](#15-비관적-락-vs-낙관적-락--완전-비교)
 16. [전략 패턴으로 락 전략 교체하기](#16-전략-패턴으로-락-전략-교체하기)
 
-### Part 4. 테스트와 검증
-17. [테스트 전략과 Testcontainers](#17-테스트-전략과-testcontainers)
-18. [동시성 테스트 — 왜 1명만 성공하는가](#18-동시성-테스트--왜-1명만-성공하는가)
+### Part 4. Redis 분산 락 + 대기열 + Kafka (3차)
+17. [전략 3: Redis 분산 락 (Redisson)](#17-전략-3-redis-분산-락-redisson)
+18. [대기열 시스템 — Redis Sorted Set + SSE](#18-대기열-시스템--redis-sorted-set--sse)
+19. [Kafka 이벤트 기반 아키텍처](#19-kafka-이벤트-기반-아키텍처)
+20. [만료 스케줄러 — ShedLock](#20-만료-스케줄러--shedlock)
 
-### Part 5. Spring Boot 심화
-19. [Spring Boot 핵심 개념 정리](#19-spring-boot-핵심-개념-정리)
-20. [설정 파일 해설](#20-설정-파일-해설)
-21. [디자인 패턴과 설계 원칙](#21-디자인-패턴과-설계-원칙)
-22. [자주 묻는 질문 (FAQ)](#22-자주-묻는-질문-faq)
+### Part 5. 테스트와 검증
+21. [테스트 전략과 Testcontainers](#21-테스트-전략과-testcontainers)
+22. [동시성 테스트 — 왜 1명만 성공하는가](#22-동시성-테스트--왜-1명만-성공하는가)
+
+### Part 6. Spring Boot 심화
+23. [Spring Boot 핵심 개념 정리](#23-spring-boot-핵심-개념-정리)
+24. [설정 파일 해설](#24-설정-파일-해설)
+25. [디자인 패턴과 설계 원칙](#25-디자인-패턴과-설계-원칙)
+26. [자주 묻는 질문 (FAQ)](#26-자주-묻는-질문-faq)
 
 ---
 
@@ -66,6 +72,11 @@
 | 통합 테스트 + 동시성 테스트 | 완료 | 1차 |
 | 좌석 예매 (낙관적 락) | 완료 | 2차 |
 | 낙관적 락 동시성 테스트 | 완료 | 2차 |
+| 좌석 예매 (Redis 분산 락) | 완료 | 3차 |
+| 대기열 시스템 (Redis + SSE) | 완료 | 3차 |
+| Kafka 이벤트 (결제완료/취소) | 완료 | 3차 |
+| 만료 스케줄러 (ShedLock) | 완료 | 3차 |
+| Redis/Kafka 통합 테스트 | 완료 | 3차 |
 
 ---
 
@@ -81,8 +92,8 @@
 | **Spring Security** | - | 인증/인가. JWT 필터 체인 구성 |
 | **Spring Retry** | - | 재시도 로직. 낙관적 락 충돌 시 자동 재시도 |
 | **PostgreSQL** | 16 | 메인 DB. 비관적 락(`SELECT FOR UPDATE`) 지원 |
-| **Redis** | 7 | 캐시, 분산 락, 대기열 (3차 구현 예정) |
-| **Kafka** | 3.9 | 이벤트 기반 처리 (3차 구현 예정) |
+| **Redis** | 7 | 분산 락 (Redisson), 대기열 (Sorted Set), 좌석 임시 점유 (TTL) |
+| **Kafka** | 3.9 | 이벤트 기반 처리 (결제 완료, 취소/만료 → 좌석 반환) |
 
 ### 라이브러리
 
@@ -90,8 +101,8 @@
 |-----------|------|
 | **jjwt** (0.12.6) | JWT 토큰 생성/검증 (HMAC-SHA256) |
 | **Lombok** | 보일러플레이트 코드 제거 (`@Getter`, `@RequiredArgsConstructor` 등) |
-| **Redisson** (3.40.2) | Redis 분산 락 클라이언트 (3차에서 활용) |
-| **ShedLock** (6.2.0) | 스케줄러 중복 실행 방지 (3차에서 활용) |
+| **Redisson** (3.40.2) | Redis 분산 락 클라이언트 (MultiLock으로 다좌석 원자적 잠금) |
+| **ShedLock** (6.2.0) | 스케줄러 중복 실행 방지 (서버 2대에서 1대만 실행) |
 | **Testcontainers** | 테스트용 Docker 컨테이너 자동 관리 |
 | **BCrypt** | 비밀번호 해싱 (Spring Security 내장) |
 
@@ -99,8 +110,8 @@
 
 - **PostgreSQL**: `SELECT FOR UPDATE`(비관적 락)를 네이티브로 지원. MySQL 대비 MVCC 구현이 더 정교
 - **Spring Retry**: 낙관적 락 충돌 시 재시도 로직을 어노테이션 하나로 선언적으로 처리
-- **Redis + Redisson**: 분산 환경에서 DB 락의 한계를 넘어서기 위해 (3차)
-- **Kafka**: 예매 만료 시 좌석 반환을 이벤트 기반으로 처리. 서버 장애 시에도 이벤트 유실 방지 (3차)
+- **Redis + Redisson**: 분산 환경에서 DB 락의 한계를 넘어서기 위해. 재고 선검증으로 DB 부하 최소화
+- **Kafka**: 예매 만료 시 좌석 반환을 이벤트 기반으로 처리. 서버 장애 시에도 이벤트 유실 방지
 
 ---
 
@@ -807,18 +818,401 @@ private ReservationService reservationService;
 
 ---
 
-## 17. 테스트 전략과 Testcontainers
+## 17. 전략 3: Redis 분산 락 (Redisson)
+
+> 파일: `service/reservation/DistributedLockReservationService.java`
+
+### 핵심 아이디어
+
+**"DB에 접근하기 전에, Redis에서 먼저 걸러내자"**
+
+비유: 콘서트 입장
+```
+비관적 락 = 매표소 1개 창구에 줄 서기 (느림)
+낙관적 락 = 모두 입장 시도 후 충돌하면 다시 줄 (재시도 폭발)
+분산 락 = 입장 전 잔여석 확인(Redis) → 좌석별 번호표(Redisson) → 입장(DB)
+```
+
+### 3단계 흐름
+
+```
+┌──────────────────────────────────────────────┐
+│ 1단계: Redis 재고 선검증 (atomic DECR)        │
+│   stock:schedule:{id} DECR 요청좌석수          │
+│   → 0 미만이면 INCR 복원 후 SoldOutException  │
+│   → DB 접근 없이 빠른 실패!                    │
+└──────────────┬───────────────────────────────┘
+               ▼
+┌──────────────────────────────────────────────┐
+│ 2단계: 좌석별 분산 락 (Redisson MultiLock)    │
+│   좌석 ID 정렬 → lock:seat:{seatId} 각각 RLock │
+│   → MultiLock.tryLock(3초 대기, 5초 자동해제) │
+│   → 데드락 방지: ID 오름차순 정렬              │
+└──────────────┬───────────────────────────────┘
+               ▼
+┌──────────────────────────────────────────────┐
+│ 3단계: DB 트랜잭션 (락 내부에서 실행)         │
+│   좌석 조회 → All-or-Nothing 검증             │
+│   → Seat::hold + Reservation 생성             │
+│   → Redis SET hold:seat:{id} EX 300           │
+└──────────────────────────────────────────────┘
+```
+
+### 왜 3단계인가?
+
+| 단계 | 역할 | 없으면? |
+|------|------|---------|
+| 1단계 | DB 부하 방지 | 매진된 상황에서도 10,000개 DB 쿼리 발생 |
+| 2단계 | 동시 접근 직렬화 | 같은 좌석에 2명이 동시에 HOLD 가능 |
+| 3단계 | 실제 데이터 변경 | Redis만으로는 좌석 상태를 영구 저장할 수 없음 |
+
+### @Transactional과 분산 락의 관계
+
+```java
+// ❌ 잘못된 구조: 트랜잭션 안에서 락 acquire/release
+@Transactional
+public void reserve() {
+    lock.lock();     // 트랜잭션 시작 → 락 획득
+    try { ... }
+    finally { lock.unlock(); }
+    // 트랜잭션 커밋 전에 락 해제 → 다른 스레드가 커밋 안 된 데이터 읽을 수 있음!
+}
+
+// ✅ 올바른 구조: 락 안에서 트랜잭션 실행
+public void reserve() {
+    lock.lock();
+    try {
+        transactionTemplate.execute(status -> {
+            // DB 작업
+        });
+    } finally {
+        lock.unlock();  // 커밋 완료 후 락 해제!
+    }
+}
+```
+
+### MultiLock — 다좌석 원자적 잠금
+
+```java
+// 좌석 ID 정렬 → 데드락 방지
+List<Long> sortedSeatIds = List.of(3L, 5L, 7L);
+
+// 각 좌석에 대해 개별 RLock 생성
+RLock[] locks = sortedSeatIds.stream()
+    .map(id -> redissonClient.getLock("lock:seat:" + id))
+    .toArray(RLock[]::new);
+
+// MultiLock으로 묶어서 한 번에 acquire
+RLock multiLock = redissonClient.getMultiLock(locks);
+multiLock.tryLock(3, 5, TimeUnit.SECONDS);
+// → 3개 좌석 모두 잠금 성공해야 진행, 하나라도 실패하면 전체 실패
+```
+
+### 3가지 락 전략 완전 비교
+
+| | 비관적 락 | 낙관적 락 | Redis 분산 락 |
+|---|---|---|---|
+| **잠금 위치** | PostgreSQL (행 단위) | JPA @Version (애플리케이션) | Redis (키 단위) |
+| **충돌 처리** | 대기 (blocking) | 예외 + 재시도 | 락 획득 실패 → 즉시 응답 |
+| **DB 부하** | 높음 (락 대기) | 중간 (재시도 쿼리) | 낮음 (Redis가 1차 필터) |
+| **분산 환경** | 단일 DB만 | 단일 DB만 | 서버 N대 지원 |
+| **구현 복잡도** | 낮음 | 중간 | 높음 |
+
+---
+
+## 18. 대기열 시스템 — Redis Sorted Set + SSE
+
+> 파일: `service/queue/QueueService.java`, `controller/QueueController.java`
+
+### 왜 대기열이 필요한가?
+
+```
+대기열 없이 1만 명 동시 접근:
+  → 1만 개 DB 커넥션 요청 → 커넥션 풀 고갈 → 전체 서비스 장애
+
+대기열 적용 후:
+  → 1만 명이 Redis에서 대기 (DB 접근 0)
+  → 100명씩 순차 입장 → DB 부하 제어
+```
+
+### 전체 흐름
+
+```
+사용자 → POST /api/queue/enter
+         │
+         ▼
+  Redis ZADD NX queue:schedule:{id} {timestamp} {userId}
+         │
+         ▼
+  GET /api/queue/events (SSE 연결)
+         │ 매 1초마다 순위 조회
+         ▼
+  순위 ≤ 100 → "READY" 이벤트 수신
+         │
+         ▼
+  GET /api/queue/token → UUID 발급 (TTL 5분)
+         │
+         ▼
+  POST /api/reservations (X-Queue-Token 헤더)
+         │ QueueTokenInterceptor 검증
+         ▼
+  예매 성공 → 토큰 소멸 (1회용)
+```
+
+### Redis Sorted Set — 왜 이 자료구조?
+
+```
+ZADD queue:schedule:1 1707123456.789 "user:42"
+ZADD queue:schedule:1 1707123457.123 "user:99"
+ZADD queue:schedule:1 1707123457.456 "user:7"
+
+→ Redis가 score(타임스탬프) 기준으로 자동 정렬
+→ ZRANK user:42 → 0 (가장 먼저 들어옴)
+→ ZRANK user:7  → 2 (가장 나중)
+```
+
+| 연산 | Redis 명령 | 시간복잡도 |
+|------|-----------|-----------|
+| 대기열 진입 | `ZADD NX` | O(log N) |
+| 순위 조회 | `ZRANK` | O(log N) |
+| 총 대기 인원 | `ZCARD` | O(1) |
+| 대기열 제거 | `ZREM` | O(log N) |
+
+**NX 옵션**: 이미 존재하는 멤버면 추가하지 않음 → 중복 진입 방지
+
+### SSE (Server-Sent Events) — 실시간 순번 알림
+
+```java
+@GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter streamPosition(@RequestParam Long scheduleId) {
+    SseEmitter emitter = new SseEmitter(60000L);  // 60초 타임아웃
+
+    // 1초마다 순위 전송
+    scheduler.scheduleAtFixedRate(() -> {
+        QueuePositionResponse position = queueService.getPosition(userId, scheduleId);
+        emitter.send(SseEmitter.event().name("POSITION").data(position));
+
+        if (position.position() <= ENTRY_THRESHOLD) {
+            emitter.send(SseEmitter.event().name("READY").data("입장 가능"));
+            emitter.complete();  // SSE 종료
+        }
+    }, 0, 1, TimeUnit.SECONDS);
+
+    return emitter;
+}
+```
+
+**SSE vs WebSocket vs Polling:**
+
+| | SSE | WebSocket | Polling |
+|---|---|---|---|
+| 방향 | 서버 → 클라이언트 | 양방향 | 클라이언트 → 서버 |
+| 프로토콜 | HTTP | WS (별도 프로토콜) | HTTP |
+| 적합 | 순번 알림 (단방향) | 채팅 (양방향) | 단순 조회 |
+
+대기열 순번은 서버에서 클라이언트로만 전송하면 되므로 SSE가 최적.
+
+### 토큰 인터셉터 — 예매 API 보호
+
+```java
+// QueueTokenInterceptor.java
+public boolean preHandle(HttpServletRequest request, ...) {
+    String token = request.getHeader("X-Queue-Token");
+    if (token == null) return true;  // 토큰 없으면 통과 (비관적/낙관적 락 사용)
+
+    Long userId = /* SecurityContext에서 추출 */;
+    Long scheduleId = /* Request body에서 추출 */;
+
+    if (!queueService.validateToken(userId, scheduleId, token)) {
+        throw new InvalidQueueTokenException("유효하지 않은 대기열 토큰");
+    }
+    return true;
+}
+```
+
+**토큰 1회 사용**: 예매 성공 시 `queueService.consumeToken()`으로 Redis에서 삭제.
+같은 토큰으로 2번 예매 시도 불가.
+
+---
+
+## 19. Kafka 이벤트 기반 아키텍처
+
+> 파일: `config/KafkaConfig.java`, `consumer/SeatReleaseConsumer.java`, `event/`
+
+### 왜 Kafka인가?
+
+```
+동기 처리의 문제:
+  결제 완료 → 알림 발송(500ms) → 통계 집계(300ms) → 사용자 응답(800ms+)
+
+비동기 처리 (Kafka):
+  결제 완료 → 이벤트 발행(5ms) → 사용자 응답(5ms)
+               ↓
+        Consumer 1: 알림 발송 (별도 스레드)
+        Consumer 2: 통계 집계 (별도 스레드)
+```
+
+### 이벤트 토픽 설계
+
+```
+reservation.completed  ← 결제 완료 시 발행
+  key: reservationId
+  value: { reservationId, userId, scheduleId, totalAmount, confirmedAt }
+
+reservation.cancelled  ← 취소/만료 시 발행
+  key: reservationId
+  value: { reservationId, userId, scheduleId, seatIds, totalAmount, reason }
+  reason: "USER_CANCELLED" 또는 "EXPIRED"
+```
+
+### Producer — 이벤트 발행
+
+```java
+// PaymentService.java — 결제 완료 시
+kafkaTemplate.send("reservation.completed",
+    String.valueOf(reservation.getId()),
+    new ReservationCompletedEvent(reservation.getId(), userId, ...));
+
+// ReservationExpirationScheduler.java — 만료 시
+kafkaTemplate.send("reservation.cancelled",
+    String.valueOf(reservation.getId()),
+    new ReservationCancelledEvent(reservation.getId(), ..., "EXPIRED"));
+```
+
+### Consumer — 좌석 반환
+
+```java
+// SeatReleaseConsumer.java
+@KafkaListener(topics = "reservation.cancelled", groupId = "seat-release")
+public void handleCancelledReservation(ReservationCancelledEvent event, Acknowledgment ack) {
+    // 1. 예매 조회
+    // 2. 좌석 반환: seat.release() (멱등성: HELD → AVAILABLE만)
+    // 3. schedule.increaseAvailableSeats()
+    // 4. Redis 재고 복원: stock:schedule INCR
+    // 5. Redis 좌석 홀드 삭제: DEL hold:seat:{seatId}
+    // 6. ack.acknowledge() — manual commit
+}
+```
+
+### 신뢰성 보장
+
+| 설정 | 값 | 의미 |
+|------|-----|------|
+| `acks` | `all` | 모든 replica 기록 후 응답 → 메시지 유실 방지 |
+| `retries` | `3` | 전송 실패 시 재시도 |
+| `enable-auto-commit` | `false` | 수동 커밋 → 처리 완료 후에만 오프셋 이동 |
+| `auto-offset-reset` | `earliest` | Consumer 재시작 시 처음부터 읽기 |
+
+### 멱등성 (Idempotency)
+
+```java
+// 같은 이벤트가 2번 도착해도 안전
+if (rs.getSeat().getStatus() == SeatStatus.HELD) {
+    rs.getSeat().release();  // HELD → AVAILABLE
+    releasedCount++;
+}
+// 이미 AVAILABLE이면 skip → 중복 처리 방지
+```
+
+---
+
+## 20. 만료 스케줄러 — ShedLock
+
+> 파일: `service/reservation/ReservationExpirationScheduler.java`, `config/SchedulerConfig.java`
+
+### 예매 만료 흐름
+
+```
+예매 생성 (PENDING, 5분 만료)
+        │
+        │ 5분 경과, 결제 미완료
+        ▼
+스케줄러 (30초 주기):
+  findByStatusAndExpiresAtBefore(PENDING, now())
+        │
+        ▼
+  reservation.expire()  → PENDING → EXPIRED
+        │
+        ▼
+  Kafka 발행: reservation.cancelled (reason="EXPIRED")
+        │
+        ▼
+  SeatReleaseConsumer:
+    seat.release() → HELD → AVAILABLE
+    schedule.increaseAvailableSeats()
+    Redis 재고 복원
+```
+
+### ShedLock — 왜 필요한가?
+
+```
+서버 2대 운영:
+  App-1: @Scheduled(fixedRate=30000) 실행
+  App-2: @Scheduled(fixedRate=30000) 실행
+  → 같은 만료 예매를 2번 처리! 중복 Kafka 이벤트!
+
+ShedLock 적용:
+  App-1: 락 획득 → 스케줄러 실행 ✅
+  App-2: 락 획득 실패 → skip ❌
+  → 30초 동안 1대만 실행!
+```
+
+```java
+@Scheduled(fixedRate = 30000)  // 30초마다
+@SchedulerLock(
+    name = "expireReservations",
+    lockAtLeastFor = "10s",    // 최소 10초간 락 유지 (중복 실행 방지)
+    lockAtMostFor = "30s"      // 최대 30초 (서버 다운 시 자동 해제)
+)
+@Transactional
+public void expireReservations() {
+    List<Reservation> expired =
+        reservationRepository.findByStatusAndExpiresAtBefore(PENDING, now());
+    for (Reservation r : expired) {
+        r.expire();
+        kafkaTemplate.send("reservation.cancelled", event);
+    }
+}
+```
+
+### ShedLock의 Redis 저장
+
+```
+Redis KEY: "shedlock:expireReservations"
+Redis VALUE: { lockedAt, lockedBy, lockUntil }
+→ lockUntil 시간이 지나면 자동으로 다른 서버가 획득 가능
+```
+
+---
+
+## 21. 테스트 전략과 Testcontainers
 
 ### Testcontainers란?
 
-테스트 실행 시 **실제 Docker 컨테이너**(PostgreSQL)를 자동으로 띄우고, 끝나면 제거합니다.
+테스트 실행 시 **실제 Docker 컨테이너**(PostgreSQL, Redis, Kafka)를 자동으로 띄우고, 끝나면 제거합니다.
 
 ```java
 // test/config/TestContainersConfig.java
-@TestConfiguration
+@TestConfiguration(proxyBeanMethods = false)
 public class TestContainersConfig {
-    @Bean
-    @ServiceConnection  // datasource URL을 자동 교체
+
+    static final GenericContainer<?> REDIS;
+    static final KafkaContainer KAFKA;
+
+    static {
+        REDIS = new GenericContainer<>(DockerImageName.parse("redis:7"))
+                .withExposedPorts(6379);
+        REDIS.start();
+
+        KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
+        KAFKA.start();
+
+        System.setProperty("spring.data.redis.host", REDIS.getHost());
+        System.setProperty("spring.data.redis.port", String.valueOf(REDIS.getMappedPort(6379)));
+        System.setProperty("spring.kafka.bootstrap-servers", KAFKA.getBootstrapServers());
+    }
+
+    @Bean @ServiceConnection
     PostgreSQLContainer<?> postgresContainer() {
         return new PostgreSQLContainer<>("postgres:16")
                 .withDatabaseName("concert_booking_test");
@@ -842,13 +1236,21 @@ public class TestContainersConfig {
 ```yaml
 # test/resources/application-test.yml
 spring:
-  autoconfigure:
-    exclude:
-      - KafkaAutoConfiguration       # 테스트에서 Kafka 불필요
-      - RedisAutoConfiguration        # 테스트에서 Redis 불필요
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+  data:
+    redis:
+      repositories:
+        enabled: false
 ```
 
-### 테스트 목록 (총 9개)
+TestContainers가 PostgreSQL, Redis, Kafka를 실제로 구동하므로 auto-config 제외가 불필요합니다.
+
+### 테스트 목록 (총 16개)
 
 | 테스트 | 파일 | 검증 내용 |
 |--------|------|-----------|
@@ -857,13 +1259,17 @@ spring:
 | 예매 E2E (2건) | `BookingFlowIntegrationTest` | 전체 예매→결제 흐름 + 취소 흐름 |
 | **비관적 락** 동시성 | `ConcurrencyIntegrationTest` | 10명 동시 예매 → 1명만 성공 |
 | **낙관적 락** 동시성 | `OptimisticLockConcurrencyTest` | 10명 동시 예매 → 1명만 성공 |
+| **대기열** (5건) | `QueueServiceTest` | 진입, 중복방지, 토큰발급/검증, 1회사용, threshold 초과 실패 |
+| **분산 락** 동시성 | `DistributedLockConcurrencyTest` | 10명 동시 예매 → 1명만 성공 (Redis 재고 검증 포함) |
+| **Kafka 이벤트** | `KafkaEventTest` | 결제 완료 시 reservation.completed 이벤트 발행 확인 |
 
 ---
 
-## 18. 동시성 테스트 — 왜 1명만 성공하는가
+## 22. 동시성 테스트 — 왜 1명만 성공하는가
 
 > 파일: `test/integration/ConcurrencyIntegrationTest.java`
 > 파일: `test/integration/OptimisticLockConcurrencyTest.java`
+> 파일: `test/integration/DistributedLockConcurrencyTest.java`
 
 ### 테스트 구조 (두 테스트 모두 동일 패턴)
 
@@ -902,6 +1308,11 @@ private ReservationService reservationService;
 @Autowired
 @Qualifier("optimisticLockReservationService")
 private ReservationService reservationService;
+
+// 분산 락 테스트 — @Qualifier로 명시
+@Autowired
+@Qualifier("distributedLockReservationService")
+private ReservationService reservationService;
 ```
 
 ### 핵심 동시성 도구 설명
@@ -929,7 +1340,7 @@ count.incrementAndGet();  // CAS 연산으로 원자적 증가
 
 ---
 
-## 19. Spring Boot 핵심 개념 정리
+## 23. Spring Boot 핵심 개념 정리
 
 ### @Transactional
 
@@ -976,7 +1387,7 @@ jpa:
 
 ---
 
-## 20. 설정 파일 해설
+## 24. 설정 파일 해설
 
 ### application.yml 핵심
 
@@ -1010,7 +1421,7 @@ jwt:
 
 ---
 
-## 21. 디자인 패턴과 설계 원칙
+## 25. 디자인 패턴과 설계 원칙
 
 ### 1. 전략 패턴 → 16장 참고
 
@@ -1040,15 +1451,15 @@ public class DataInitializer implements ApplicationRunner {
 
 ---
 
-## 22. 자주 묻는 질문 (FAQ)
+## 26. 자주 묻는 질문 (FAQ)
 
 ### Q1. 왜 setter를 안 쓰나요?
 Setter는 아무 곳에서나, 아무 값으로 상태를 바꿀 수 있어 위험합니다.
 `seat.hold()`처럼 의미 있는 메서드로 상태 검증 + 전이를 강제합니다.
 
-### Q2. 비관적 락과 낙관적 락 중 뭐가 좋나요?
-정답은 없습니다. 충돌이 많으면 비관적 락, 적으면 낙관적 락이 유리합니다.
-이 프로젝트에서 두 가지를 모두 구현한 이유가 바로 이 비교를 위해서입니다.
+### Q2. 비관적/낙관적/분산 락 중 뭐가 좋나요?
+정답은 없습니다. 충돌이 많으면 비관적 락, 적으면 낙관적 락, 분산 환경이면 Redis 분산 락이 유리합니다.
+이 프로젝트에서 세 가지를 모두 구현한 이유가 바로 이 비교를 위해서입니다.
 
 ### Q3. 왜 schema.sql로 테이블을 만드나요?
 `ddl-auto: update`는 컬럼 삭제/이름 변경을 감지 못하고, 인덱스를 자동 생성하지 않습니다.
@@ -1068,6 +1479,15 @@ Setter는 아무 곳에서나, 아무 값으로 상태를 바꿀 수 있어 위�
 
 ### Q7. 왜 예매할 때 schedule.decreaseAvailableSeats()를 호출하나요?
 매번 `SELECT COUNT(*)`를 실행하면 느립니다. `available_seats` 필드를 미리 갱신하면 O(1)로 조회 가능합니다. 이것을 **역정규화(Denormalization)**라고 합니다.
+
+### Q8. 분산 락에서 왜 @Transactional을 직접 사용하지 않나요?
+분산 락 acquire/release가 트랜잭션 바깥에 있어야 합니다. 트랜잭션 커밋이 완료된 후 락을 해제해야 다른 스레드가 커밋된 데이터를 읽을 수 있습니다. 그래서 `TransactionTemplate`을 사용하여 락 내부에서 프로그래밍 방식으로 트랜잭션을 관리합니다.
+
+### Q9. 대기열 토큰이 없으면 예매가 안 되나요?
+토큰 없이도 예매 가능합니다. `QueueTokenInterceptor`는 X-Queue-Token 헤더가 있을 때만 검증합니다. 비관적/낙관적 락 서비스는 대기열 없이 직접 사용 가능하고, 분산 락 서비스는 대기열을 거치도록 설계되었습니다.
+
+### Q10. Kafka Consumer가 실패하면 좌석이 영원히 잠기나요?
+아닙니다. 3단계 안전장치가 있습니다: (1) Consumer 재시도 3회 + DLT, (2) Redis 좌석 홀드 TTL 5분 자동 만료, (3) DB의 expires_at + 스케줄러가 최종적으로 만료 처리합니다.
 
 ---
 
@@ -1106,9 +1526,5 @@ curl -X POST http://localhost:8080/api/payments \
 
 ---
 
-> 이 문서에서 다루지 않은 내용 (3차에서 구현 예정):
-> - Redis 분산 락 (Redisson)
-> - Redis 대기열 + SSE 실시간 알림
-> - Kafka 이벤트 기반 좌석 반환
-> - 만료 스케줄러 (ShedLock)
-> - k6 부하 테스트 + 3가지 락 전략 성능 비교
+> 이 문서에서 다루지 않은 내용:
+> - k6 부하 테스트 + 3가지 락 전략 성능 비교 (PERF_RESULT.md에서 다룰 예정)

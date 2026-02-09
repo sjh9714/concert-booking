@@ -51,6 +51,14 @@ Client (Browser)
     └─────────────┘
 ```
 
+## 구현 현황
+
+| 구현 차수 | 내용 | 상태 |
+|-----------|------|------|
+| 1차 MVP | Entity, JWT 인증, 콘서트 CRUD, 예매(비관적 락), 결제, 통합 테스트 | 완료 |
+| 2차 | @Version + Spring Retry 낙관적 락, 동시성 테스트 | 완료 |
+| 3차 | Redis 분산 락, 대기열(SSE), Kafka 이벤트, ShedLock 스케줄러 | 완료 |
+
 ## 동시성 제어 전략
 
 ### 전략 1: 비관적 락 (Pessimistic Lock)
@@ -63,7 +71,7 @@ Client (Browser)
 
 ### 전략 3: Redis 분산 락 (Redisson)
 
-Redis 재고 선검증(atomic decrement) → 좌석별 분산 락 → DB 상태 변경. DB 부하를 최소화하고 분산 환경을 지원합니다.
+Redis 재고 선검증(atomic DECR) → 좌석별 Redisson MultiLock → DB 상태 변경의 3단계 흐름. DB 부하를 최소화하고 분산 환경을 지원합니다.
 
 ### 전략 비교 (k6 측정 예정)
 
@@ -72,6 +80,23 @@ Redis 재고 선검증(atomic decrement) → 좌석별 분산 락 → DB 상태 
 | RPS | 측정 예정 | 측정 예정 | 측정 예정 |
 | p99 응답시간 | 측정 예정 | 측정 예정 | 측정 예정 |
 | overselling | 0건 | 0건 | 0건 |
+
+## 주요 기능 상세
+
+### 대기열 시스템
+- Redis Sorted Set(ZADD NX) + SSE 실시간 순번 스트림
+- 100등 이내 입장 토큰 발급 → 예매 API 접근 허용
+- 토큰 1회 사용 후 자동 소멸 (TTL 5분)
+
+### Kafka 이벤트
+- `reservation.completed`: 결제 완료 시 발행
+- `reservation.cancelled`: 취소/만료 시 발행 → `seat-release` Consumer가 좌석 반환
+- Manual commit + DLT(Dead Letter Topic) + 3회 재시도
+
+### 만료 스케줄러
+- 30초 주기로 PENDING 상태 만료 예매 스캔
+- ShedLock으로 서버 2대 중복 실행 방지
+- 만료 시 Kafka 이벤트 발행 → Consumer가 좌석 반환
 
 ## 실행 방법
 
@@ -104,5 +129,5 @@ docker compose up -d
 ## 문서
 
 - [설계 문서](docs/DESIGN.md) — ERD, API, 동시성 전략, 대기열, Kafka, ADR
-- [학습 가이드](docs/STUDY_GUIDE.md) — 프로젝트 전체 코드 해설 (비관적/낙관적 락, JWT, 상태 머신, 전략 패턴, Spring Retry, 동시성 테스트 등)
+- [학습 가이드](docs/STUDY_GUIDE.md) — 프로젝트 전체 코드 해설 (비관적/낙관적/분산 락, 대기열, Kafka, JWT, 상태 머신, 전략 패턴 등)
 - [성능 측정 결과](docs/PERF_RESULT.md) — 3가지 락 전략 비교 (구현 후 작성)

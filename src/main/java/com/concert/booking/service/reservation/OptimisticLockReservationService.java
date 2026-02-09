@@ -8,8 +8,11 @@ import com.concert.booking.dto.concert.SeatResponse;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.event.ReservationCancelledEvent;
 import com.concert.booking.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OptimisticLockReservationService implements ReservationService {
@@ -30,6 +34,7 @@ public class OptimisticLockReservationService implements ReservationService {
     private final SeatRepository seatRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationSeatRepository reservationSeatRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
     @Retryable(
@@ -124,5 +129,25 @@ public class OptimisticLockReservationService implements ReservationService {
         }
 
         reservation.getSchedule().increaseAvailableSeats(reservationSeats.size());
+
+        // Kafka 이벤트 발행 (알림/통계용)
+        try {
+            List<Long> seatIds = reservationSeats.stream()
+                    .map(rs -> rs.getSeat().getId())
+                    .toList();
+
+            ReservationCancelledEvent event = new ReservationCancelledEvent(
+                    reservation.getId(),
+                    reservation.getUser().getId(),
+                    reservation.getSchedule().getId(),
+                    seatIds,
+                    reservation.getTotalAmount(),
+                    "USER_CANCELLED"
+            );
+            kafkaTemplate.send("reservation.cancelled",
+                    String.valueOf(reservation.getId()), event);
+        } catch (Exception e) {
+            log.warn("예매 취소 이벤트 발행 실패: reservationId={}", reservationId, e);
+        }
     }
 }

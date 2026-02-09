@@ -45,7 +45,7 @@ src/main/java/com/concert/booking/
 
 - 1차 MVP (비관적 락): 완료 — Entity, JWT 인증, 콘서트 CRUD, 예매(SELECT FOR UPDATE), 결제, 통합 테스트
 - 2차 (낙관적 락): 완료 — @Version + Spring Retry(@Retryable), 낙관적 락 동시성 테스트
-- 3차 (Redis 분산 락 + 대기열 + Kafka): 미구현
+- 3차 (Redis 분산 락 + 대기열 + Kafka): 완료 — Redisson 분산 락, Redis Sorted Set 대기열 + SSE, Kafka 이벤트(결제완료/취소), ShedLock 만료 스케줄러, 통합 테스트
 
 ## 빌드 / 실행
 
@@ -56,7 +56,7 @@ docker compose up -d
 # 애플리케이션 빌드 및 실행
 ./gradlew bootRun
 
-# 테스트 (Testcontainers로 PostgreSQL 자동 구동)
+# 테스트 (Testcontainers로 PostgreSQL, Redis, Kafka 자동 구동)
 ./gradlew test
 ```
 

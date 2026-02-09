@@ -9,15 +9,20 @@ import com.concert.booking.domain.ReservationSeat;
 import com.concert.booking.domain.ReservationStatus;
 import com.concert.booking.dto.payment.PaymentRequest;
 import com.concert.booking.dto.payment.PaymentResponse;
+import com.concert.booking.event.ReservationCompletedEvent;
 import com.concert.booking.repository.PaymentRepository;
 import com.concert.booking.repository.ReservationRepository;
 import com.concert.booking.repository.ReservationSeatRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
@@ -25,6 +30,7 @@ public class PaymentService {
     private final ReservationRepository reservationRepository;
     private final ReservationSeatRepository reservationSeatRepository;
     private final PaymentRepository paymentRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Transactional
     public PaymentResponse pay(Long userId, PaymentRequest request) {
@@ -57,6 +63,21 @@ public class PaymentService {
         List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservation.getId());
         for (ReservationSeat rs : reservationSeats) {
             rs.getSeat().reserve();
+        }
+
+        // Kafka 이벤트 발행: 예매 완료
+        try {
+            ReservationCompletedEvent event = new ReservationCompletedEvent(
+                    reservation.getId(),
+                    reservation.getUser().getId(),
+                    reservation.getSchedule().getId(),
+                    reservation.getTotalAmount(),
+                    LocalDateTime.now()
+            );
+            kafkaTemplate.send("reservation.completed",
+                    String.valueOf(reservation.getId()), event);
+        } catch (Exception e) {
+            log.warn("예매 완료 이벤트 발행 실패: reservationId={}", reservation.getId(), e);
         }
 
         return PaymentResponse.from(payment);
