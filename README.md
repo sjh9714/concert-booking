@@ -11,9 +11,9 @@ k6 부하 테스트로 각 전략의 성능과 정합성을 정량 비교합니�
 | 챌린지 | 해결 방법 |
 |--------|-----------|
 | 동시 예매 정합성 | 비관적 락 / 낙관적 락 / Redis 분산 락 3가지 전략 비교, overselling 0건 |
-| 대기열 시스템 | Redis Sorted Set + SSE로 1만 명 순차 입장 |
+| 대기열 시스템 | Redis Sorted Set + SSE로 순차 입장 (100등 이내 토큰 발급) |
 | 좌석 임시 점유 | Redis TTL 5분 + 스케줄러 자동 해제 |
-| 분산 환경 동시성 | Redisson 분산 락으로 서버 2대 크로스 정합성 |
+| 분산 환경 대비 | Redisson 분산 락 + ShedLock으로 다중 인스턴스 확장 가능 설계 |
 | 성능 측정 | k6로 3가지 시나리오 측정, 전략별 RPS/p95 정량 비교 |
 
 ## 기술 스택
@@ -24,7 +24,6 @@ k6 부하 테스트로 각 전략의 성능과 정합성을 정량 비교합니�
 - **Messaging**: Apache Kafka (KRaft)
 - **Real-time**: SSE (Server-Sent Events)
 - **Test**: Testcontainers, k6
-- **Monitoring**: Prometheus, Grafana
 - **Infra**: Docker Compose
 
 ## 아키텍처
@@ -34,9 +33,7 @@ Client (Browser)
     │ REST API + SSE
     ▼
 ┌─────────────────────────────┐
-│   Spring Boot Cluster       │
-│   App-1 (:8081)             │
-│   App-2 (:8082)             │
+│   Spring Boot App (:8080)   │
 │       Redisson 분산 락       │
 └──────────┬──────────────────┘
            │
@@ -50,6 +47,8 @@ Client (Browser)
     │   Kafka     │  예매 완료/취소 이벤트 · DLT
     └─────────────┘
 ```
+
+> Redisson 분산 락을 사용하므로 다중 인스턴스 확장이 가능하며, ShedLock으로 스케줄러 중복 실행을 방지합니다.
 
 ## 구현 현황
 
