@@ -104,6 +104,12 @@ reservation:
 
 `k6/`에는 락 전략 비교를 위한 시나리오가 포함되어 있습니다.
 
+### 정합성·전략 비교 포인트
+
+- 비관적 락, 낙관적 락, Redis 분산 락 세 가지 전략을 같은 좌석 예매 시나리오에서 비교했습니다.
+- k6 부하 테스트로 전략별 RPS, p95 latency, 실패율을 측정하고 `overselling 0건`을 정합성 기준으로 확인했습니다.
+- Redis 대기열, 좌석 임시 점유 TTL, Kafka 좌석 반환 이벤트, ShedLock 스케줄러를 함께 두어 단일 예매 API를 넘어 실제 예매 흐름에 가까운 구조를 검증했습니다.
+
 ```bash
 k6 run k6/scenario-a.js
 k6 run k6/scenario-b.js
