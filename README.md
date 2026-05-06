@@ -1,135 +1,119 @@
 # Concert Booking
 
-**"1만 명이 동시에 1,000석을 예매할 때 정합성을 어떻게 보장할 것인가"**
+Concert Booking은 콘서트 좌석 예매를 주제로 동시성 제어 전략을 비교하는 Spring Boot 백엔드입니다. 비관적 락, 낙관적 락, Redis 분산 락을 구현하고, 대기열, 좌석 임시 점유, 결제, Kafka 이벤트, 만료 스케줄러까지 예매 흐름에 필요한 요소를 함께 구성했습니다.
 
-콘서트 좌석 예매 시스템을 통해 동시성 제어를 깊게 탐구하는 백엔드 프로젝트입니다.
-비관적 락 → 낙관적 락 → Redis 분산 락 3가지 전략을 단계적으로 구현하고,
-k6 부하 테스트로 각 전략의 성능과 정합성을 정량 비교합니다.
+## 문제 의식
 
-## 핵심 기술 챌린지
+좌석 예매는 한정된 좌석에 요청이 몰리는 대표적인 동시성 문제입니다. 이 저장소는 overselling을 막기 위한 락 전략을 분리하고, Redis 기반 대기열과 Kafka 기반 좌석 반환 이벤트를 결합해 실제 예매 흐름에 가까운 백엔드 구조를 실험합니다.
 
-| 챌린지 | 해결 방법 |
-|--------|-----------|
-| 동시 예매 정합성 | 비관적 락 / 낙관적 락 / Redis 분산 락 3가지 전략 비교, overselling 0건 |
-| 대기열 시스템 | Redis Sorted Set + SSE로 순차 입장 (100등 이내 토큰 발급) |
-| 좌석 임시 점유 | Redis TTL 5분 + 스케줄러 자동 해제 |
-| 분산 환경 대비 | Redisson 분산 락 + ShedLock으로 다중 인스턴스 확장 가능 설계 |
-| 성능 측정 | k6로 3가지 시나리오 측정, 전략별 RPS/p95 정량 비교 |
+## 주요 기능
+
+- 회원가입, 로그인, JWT 인증
+- 콘서트와 공연 일정 조회
+- 좌석 현황 조회
+- Redis Sorted Set 기반 대기열 진입
+- SSE 기반 실시간 대기 순번 스트림
+- 입장 토큰 기반 예매 API 접근 제어
+- 좌석 예매, 예매 상세 조회, 결제 확정
+- 비관적 락, 낙관적 락, Redis 분산 락 전략 전환
+- Redis TTL 기반 좌석 임시 점유
+- Kafka 예매 완료/취소 이벤트와 좌석 반환 consumer
+- 만료 예매 스케줄러와 ShedLock
+- Testcontainers 통합 테스트와 k6 부하 테스트
 
 ## 기술 스택
 
-- **Runtime**: Java 21, Spring Boot 3.4.x
-- **DB**: PostgreSQL 16
-- **Cache / Lock**: Redis 7 + Redisson
-- **Messaging**: Apache Kafka (KRaft)
-- **Real-time**: SSE (Server-Sent Events)
-- **Test**: Testcontainers, k6
-- **Infra**: Docker Compose
+| 영역 | 기술 |
+| --- | --- |
+| Backend | Java 21, Spring Boot 3.4.1, Spring Web, Spring Security |
+| Persistence | Spring Data JPA, PostgreSQL 16 |
+| Lock / Queue | Redis 7, Redisson, ShedLock |
+| Messaging | Kafka, Spring Kafka |
+| Realtime | Server-Sent Events |
+| Test / Perf | JUnit 5, Testcontainers, k6 |
+| Build / Infra | Gradle Kotlin DSL, Docker Compose |
 
-## 아키텍처
+## 예매 흐름
 
-```
-Client (Browser)
-    │ REST API + SSE
-    ▼
-┌─────────────────────────────┐
-│   Spring Boot App (:8080)   │
-│       Redisson 분산 락       │
-└──────────┬──────────────────┘
-           │
-    ┌──────▼──────┐
-    │    Redis    │  분산 락 · 대기열 · 좌석 점유
-    └──────┬──────┘
-    ┌──────▼──────┐
-    │ PostgreSQL  │  비관적/낙관적 락 · 데이터 저장
-    └──────┬──────┘
-    ┌──────▼──────┐
-    │   Kafka     │  예매 완료/취소 이벤트 · DLT
-    └─────────────┘
+```text
+대기열 진입
+→ 입장 가능 순번이면 토큰 발급
+→ 좌석 예매 요청
+→ 선택된 reservation.strategy로 좌석 정합성 제어
+→ 결제 요청
+→ reservation.completed 이벤트 발행
+→ 취소/만료 시 reservation.cancelled 이벤트로 좌석 반환
 ```
 
-> Redisson 분산 락을 사용하므로 다중 인스턴스 확장이 가능하며, ShedLock으로 스케줄러 중복 실행을 방지합니다.
+## 구조
 
-## 구현 현황
-
-| 구현 차수 | 내용 | 상태 |
-|-----------|------|------|
-| 1차 MVP | Entity, JWT 인증, 콘서트 CRUD, 예매(비관적 락), 결제, 통합 테스트 | 완료 |
-| 2차 | @Version + Spring Retry 낙관적 락, 동시성 테스트 | 완료 |
-| 3차 | Redis 분산 락, 대기열(SSE), Kafka 이벤트, ShedLock 스케줄러 | 완료 |
-
-## 동시성 제어 전략
-
-### 전략 1: 비관적 락 (Pessimistic Lock)
-
-`SELECT ... FOR UPDATE`로 좌석에 배타적 잠금. 구현이 단순하고 정합성이 확실하지만 잠금 대기로 처리량이 저하됩니다.
-
-### 전략 2: 낙관적 락 (Optimistic Lock)
-
-`@Version` 기반 충돌 감지 + 재시도. 잠금 대기 없이 처리량이 높지만 경합이 심하면 재시도가 폭발합니다.
-
-### 전략 3: Redis 분산 락 (Redisson)
-
-Redis 재고 선검증(atomic DECR) → 좌석별 Redisson MultiLock → DB 상태 변경의 3단계 흐름. DB 부하를 최소화하고 분산 환경을 지원합니다.
-
-### 전략 비교 (k6 측정 완료)
-
-| 메트릭 | 비관적 락 | 낙관적 락 | Redis 분산 락 |
-|--------|-----------|-----------|--------------|
-| 다른 좌석 동시 예매 성공률 | **100%** | 40% | **100%** |
-| 혼합 트래픽 쓰기 p95 | 37ms | 10ms | **6ms** |
-| 혼합 트래픽 RPS | 969 | 993 | **1,005** |
-| overselling | **0건** | **0건** | **0건** |
-
-> 상세 분석은 [성능 측정 결과](docs/PERF_RESULT.md)를 참고하세요.
-
-## 주요 기능 상세
-
-### 대기열 시스템
-- Redis Sorted Set(ZADD NX) + SSE 실시간 순번 스트림
-- 100등 이내 입장 토큰 발급 → 예매 API 접근 허용
-- 토큰 1회 사용 후 자동 소멸 (TTL 5분)
-
-### Kafka 이벤트
-- `reservation.completed`: 결제 완료 시 발행
-- `reservation.cancelled`: 취소/만료 시 발행 → `seat-release` Consumer가 좌석 반환
-- Manual commit + DLT(Dead Letter Topic) + 3회 재시도
-
-### 만료 스케줄러
-- 30초 주기로 PENDING 상태 만료 예매 스캔
-- ShedLock으로 서버 2대 중복 실행 방지
-- 만료 시 Kafka 이벤트 발행 → Consumer가 좌석 반환
+```text
+src/main/java/com/concert/booking/
+├── common/       # JWT, 예외, interceptor, util
+├── config/       # Redis, Kafka, Security, scheduler, strategy
+├── consumer/     # 좌석 반환 Kafka consumer
+├── controller/   # Auth, Concert, Queue, Reservation, Payment, Admin API
+├── domain/       # Concert, Seat, Reservation, Payment 등
+├── dto/          # 요청/응답 DTO
+├── event/        # ReservationCompleted/Cancelled event
+├── repository/   # JPA Repository
+└── service/      # 예매, 결제, 대기열, 인증, 콘서트 서비스
+```
 
 ## 실행 방법
 
+PostgreSQL, Redis, Kafka, Kafka UI를 Docker Compose로 실행합니다.
+
 ```bash
-# 인프라 실행
 docker compose up -d
+```
 
-# 애플리케이션 빌드 및 실행
+애플리케이션을 실행합니다.
+
+```bash
 ./gradlew bootRun
+```
 
-# 테스트 (Testcontainers로 PostgreSQL, Redis, Kafka 자동 구동)
+테스트는 Testcontainers를 사용합니다.
+
+```bash
 ./gradlew test
 ```
 
-## API
+락 전략은 `src/main/resources/application.yml`의 `reservation.strategy` 값으로 전환합니다.
 
-| Method | Endpoint | 설명 |
-|--------|----------|------|
+```yaml
+reservation:
+  strategy: pessimistic # pessimistic | optimistic | distributed
+```
+
+## API 요약
+
+| Method | Path | 설명 |
+| --- | --- | --- |
 | POST | `/api/auth/signup` | 회원가입 |
-| POST | `/api/auth/login` | 로그인 (JWT 발급) |
+| POST | `/api/auth/login` | 로그인 |
 | GET | `/api/concerts` | 콘서트 목록 |
 | GET | `/api/concerts/{id}/schedules/{scheduleId}/seats` | 좌석 현황 |
 | POST | `/api/queue/enter` | 대기열 진입 |
-| GET | `/api/queue/events` | SSE 실시간 순번 스트림 |
-| POST | `/api/reservations` | 좌석 예매 (입장 토큰 필요) |
-| POST | `/api/payments` | 결제 요청 (예매 확정) |
+| GET | `/api/queue/events` | SSE 대기 순번 스트림 |
+| POST | `/api/reservations` | 좌석 예매 |
+| POST | `/api/payments` | 결제 요청 |
 
-전체 API 목록은 [설계 문서](docs/DESIGN.md)를 참고하세요.
+## 성능 테스트
+
+`k6/`에는 락 전략 비교를 위한 시나리오가 포함되어 있습니다.
+
+```bash
+k6 run k6/scenario-a.js
+k6 run k6/scenario-b.js
+k6 run k6/scenario-c.js
+```
+
+상세 결과는 `docs/PERF_RESULT.md`에서 확인할 수 있습니다.
 
 ## 문서
 
-- [설계 문서](docs/DESIGN.md) — ERD, API, 동시성 전략, 대기열, Kafka, ADR
-- [학습 가이드](docs/STUDY_GUIDE.md) — 프로젝트 전체 코드 해설 (비관적/낙관적/분산 락, 대기열, Kafka, JWT, 상태 머신, 전략 패턴 등)
-- [성능 측정 결과](docs/PERF_RESULT.md) — k6 부하 테스트 3가지 전략 비교 (정합성, 성공률, 응답 시간, RPS)
+- `docs/DESIGN.md`: ERD, API, 전략, 대기열, Kafka, ADR
+- `docs/STUDY_GUIDE.md`: 코드 흐름 학습 가이드
+- `docs/PERF_RESULT.md`: k6 기반 성능 측정 결과
