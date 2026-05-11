@@ -7,8 +7,8 @@
  */
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
-import { CONCERT_ID, SCHEDULE_ID } from './config.js';
-import { getSeats, reserve, resetData, setupUsers } from './helpers.js';
+import { SCHEDULE_ID } from './config.js';
+import { getSeats, reserve, resetLoadTestData, setupUsers, summary } from './helpers.js';
 
 const readSuccess = new Counter('read_success');
 const writeSuccess = new Counter('write_success');
@@ -37,14 +37,14 @@ export const options = {
 };
 
 export function setup() {
-    // 데이터 리셋
-    resetData(SCHEDULE_ID);
+    // 부하 테스트 fixture 리셋
+    const fixture = resetLoadTestData(SCHEDULE_ID, MIXED_VUS);
 
-    // 사용자 생성
-    const users = setupUsers(MIXED_VUS, `scenario-c-${Date.now()}`);
+    // deterministic 사용자 로그인
+    const users = setupUsers(MIXED_VUS);
 
     // 좌석 목록 확보
-    const seatsRes = getSeats(users[0].token, CONCERT_ID, SCHEDULE_ID);
+    const seatsRes = getSeats(users[0].token, fixture.concertId, SCHEDULE_ID);
     const seats = JSON.parse(seatsRes.body);
     const availableSeats = seats.filter(s => s.status === 'AVAILABLE');
     const seatIds = availableSeats.map(s => s.id);
@@ -57,7 +57,7 @@ export function setup() {
     console.log(`[Setup] 사용자 ${users.length}명, 전체 좌석 ${seatIds.length}개`);
     console.log(`- 인기 좌석: ${hotSeats.length}개, 일반 좌석: ${coldSeats.length}개`);
 
-    return { users, hotSeats, coldSeats, allSeatIds: seatIds };
+    return { users, hotSeats, coldSeats, allSeatIds: seatIds, concertId: fixture.concertId };
 }
 
 export default function (data) {
@@ -69,7 +69,7 @@ export default function (data) {
     if (Math.random() < 0.7) {
         // 좌석 조회
         const start = Date.now();
-        const res = getSeats(user.token, CONCERT_ID, SCHEDULE_ID);
+        const res = getSeats(user.token, data.concertId, SCHEDULE_ID);
         readDuration.add(Date.now() - start);
 
         if (check(res, { 'seats fetched': (r) => r.status === 200 })) {
@@ -101,7 +101,9 @@ export default function (data) {
 }
 
 export function teardown(data) {
+    const finalSummary = summary(SCHEDULE_ID);
     console.log(`[Teardown] Scenario C 완료`);
     console.log(`- VU 수: ${MIXED_VUS}`);
+    console.log(`- 최종 예약 수: ${finalSummary.reservationCount}, Redis stock: ${finalSummary.redisStock}`);
     console.log('- 결과: k6 메트릭에서 읽기/쓰기 RPS, p95, 에러율 확인');
 }
