@@ -13,6 +13,7 @@
 | 동일 좌석 경합에서 overselling 발생 가능 | 비관적 락, 낙관적 락, Redis 분산 락 전략을 분리하고 k6/통합 테스트로 비교 |
 | 예매 API 직접 진입 위험 | Redis Sorted Set 대기열과 `userId + scheduleId` 바인딩 입장 토큰 |
 | 결제 전 좌석 임시 점유 | `HELD` 좌석, Redis seat hold TTL, reservation `expiresAt` |
+| 다른 schedule 좌석으로 예매되는 위험 | 좌석 조회를 `scheduleId + seatIds + AVAILABLE` 조건으로 제한 |
 | 중복 예매/중복 결제 | HTTP `Idempotency-Key`와 DB unique constraint |
 | 결제/취소/만료 동시 실행 | reservation row lock과 도메인 상태 전이 메서드 |
 | DB commit 이후 Kafka publish 실패 | Outbox table과 relay scheduler |
@@ -62,6 +63,7 @@ queue enter
 | 세 가지 ReservationService 전략 유지 | 같은 API 계약에서 비관적/낙관적/분산 락의 차이를 비교하기 위해 분리했습니다. |
 | Redis stock pre-check | 분산 락 전략에서 소진 이후 실패 요청이 DB까지 들어가는 비용을 줄입니다. |
 | DB final consistency | Redis stock은 캐시입니다. 최종 기준은 DB `Seat.status = AVAILABLE` count입니다. |
+| 좌석은 요청 schedule에 속해야 함 | 세 락 전략 모두 schedule-bound seat query를 사용합니다. |
 | `Idempotency-Key` | 사용자 더블클릭, timeout 이후 재요청, 결제 재시도를 DB unique constraint로 막습니다. |
 | Outbox Pattern | DB commit과 Kafka publish 사이의 이벤트 유실 구간을 줄입니다. |
 | DLT + manual replay utility | Consumer 처리 실패를 격리하고, 로컬 검증용 수동 복구 경로를 제공합니다. |
@@ -84,6 +86,7 @@ queue enter
 | --- | --- |
 | 예약/결제 조회 소유권 | `AccessControlIntegrationTest` |
 | 입장 토큰 필수 검증/성공 후 소비/실패 시 보존 | `QueueTokenPolicyIntegrationTest` |
+| 요청 schedule과 seatIds 소속 검증 | `SeatScheduleValidationIntegrationTest` |
 | 예매 idempotency와 DB unique constraint | `ReservationIdempotencyIntegrationTest` |
 | 결제 idempotency와 중복 결제 차단 | `PaymentIdempotencyIntegrationTest` |
 | 결제/취소/만료 race | `ReservationStateTransitionRaceIntegrationTest` |
@@ -91,6 +94,7 @@ queue enter
 | Outbox 저장/relay 성공/실패 재시도 | `OutboxIntegrationTest` |
 | Kafka DLT와 replay | `KafkaDltReplayIntegrationTest` |
 | Redis stock reconciliation | `StockReconciliationIntegrationTest` |
+| 일반 admin endpoint의 `ROLE_ADMIN` 보호 | `AdminSecurityIntegrationTest` |
 | 분산 락 실패 경로의 stock 복원 | `DistributedLockStockFailureIntegrationTest` |
 | k6 fixture reset endpoint | `LoadTestAdminControllerIntegrationTest` |
 
@@ -153,15 +157,17 @@ SMOKE=1 STRATEGY=distributed SCENARIO=scenario-f VUS=1 bash k6/run-all.sh
 | `DELETE` | `/api/reservations/{id}` | 본인 예매만 취소 |
 | `POST` | `/api/payments` | `Idempotency-Key` header 필수, mock payment |
 | `GET` | `/api/payments/{id}` | 본인 결제만 조회 |
-| `POST` | `/api/admin/dlt/replay` | 로컬 검증용 manual replay utility |
+| `POST` | `/api/admin/dlt/replay` | `ROLE_ADMIN` 필요, manual replay utility |
+| `POST` | `/api/admin/load-test/reset` | `!prod` profile에서만 노출되는 k6 fixture utility |
 
 ## Limitations
 
 - k6 수치는 로컬 Docker 기준입니다. 실제 운영 환경 수치가 아닙니다.
 - 결제는 외부 PG 연동이 아니라 mock payment 즉시 성공 구조입니다.
 - SSE 대기열은 순번 알림용 단방향 스트림입니다.
-- DLT replay는 `/api/admin/dlt/replay`로 실행하는 manual utility입니다.
-- `/api/admin/**`는 로컬/포트폴리오 검증용입니다. 관리자 인증/권한 모델은 별도 과제입니다.
+- DLT replay는 `ROLE_ADMIN` 권한으로 `/api/admin/dlt/replay`를 호출하는 manual utility입니다.
+- `/api/admin/load-test/**`는 k6 재현성 검증용이며 `!prod` profile에서만 로드됩니다.
+- 기본 회원가입은 `USER` 권한만 만들며, admin 계정 발급/운영 절차는 별도 과제입니다.
 - Redis 장애 자동 fallback, 운영 알림, 배포 환경의 autoscaling은 구현 범위에 넣지 않았습니다.
 - A/B/C k6 결과는 단일 실행 측정값입니다. D/E/F는 script added, result pending입니다.
 

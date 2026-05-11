@@ -21,6 +21,7 @@ flowchart LR
 ```
 
 역할을 일부러 나눴습니다. 예매 서비스는 좌석 선점과 상태 전이에 집중하고, Kafka consumer는 취소/만료 이후 좌석 반환을 멱등적으로 처리합니다. Redis stock은 빠른 선검증용이고, 최종 정합성 기준은 DB입니다.
+좌석 조회는 항상 요청 `scheduleId`와 `seatIds`를 함께 조건으로 걸어, 다른 공연 일정의 좌석이 예매에 섞이지 않도록 합니다.
 
 ## 2. Data Model
 
@@ -337,6 +338,7 @@ flowchart LR
 - `/api/admin/schedules/{scheduleId}/stock/initialize?overwrite=false`는 기존 key가 있으면 보존합니다.
 - 분산 예매 진입 시 stock key가 없으면 lazy init을 수행합니다.
 - 좌석 조회 API는 stock을 만들거나 덮어쓰지 않습니다.
+- 일반 `/api/admin/**` utility는 `ROLE_ADMIN` 권한이 필요합니다.
 
 Reconciliation endpoint:
 
@@ -346,6 +348,7 @@ POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=true
 ```
 
 이 기능은 manual reconciliation utility입니다. 자동 운영 보정 기능으로 주장하지 않습니다.
+`repair=true`는 관리자 권한으로 수동 실행하는 경로이며, Redis를 단일 진실 공급원으로 만들지 않습니다.
 
 ## 12. k6 Reproducibility
 

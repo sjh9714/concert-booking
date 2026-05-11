@@ -83,7 +83,9 @@ public class PessimisticLockReservationService implements ReservationService {
         List<Long> sortedSeatIds = request.seatIds().stream().sorted().toList();
 
         // 비관적 락으로 좌석 조회 (SELECT FOR UPDATE)
-        List<Seat> seats = seatRepository.findAllByIdInAndAvailableForUpdate(sortedSeatIds);
+        List<Seat> seats = seatRepository.findAllByScheduleIdAndIdInAndAvailableForUpdate(
+                request.scheduleId(),
+                sortedSeatIds);
 
         // All-or-Nothing: 요청한 좌석 수와 조회된 좌석 수 비교
         if (seats.size() != sortedSeatIds.size()) {

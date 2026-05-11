@@ -1,6 +1,7 @@
 package com.concert.booking.integration;
 
 import com.concert.booking.common.util.RedisKeyUtil;
+import com.concert.booking.common.jwt.JwtProvider;
 import com.concert.booking.config.TestContainersConfig;
 import com.concert.booking.domain.Concert;
 import com.concert.booking.domain.ConcertSchedule;
@@ -56,6 +57,7 @@ class StockReconciliationIntegrationTest {
     @Autowired private ReservationSeatRepository reservationSeatRepository;
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private RedisTemplate<String, String> redisTemplate;
+    @Autowired private JwtProvider jwtProvider;
 
     @Test
     @DisplayName("stock 초기화는 DB AVAILABLE 좌석 수를 기준으로 생성한다")
@@ -137,6 +139,7 @@ class StockReconciliationIntegrationTest {
         Scenario scenario = createResetScenario();
 
         mockMvc.perform(post("/api/admin/reset")
+                        .header("Authorization", "Bearer " + adminToken())
                         .param("scheduleId", String.valueOf(scenario.scheduleId())))
                 .andExpect(status().isOk());
 
@@ -144,6 +147,14 @@ class StockReconciliationIntegrationTest {
         assertThat(redisTemplate.opsForValue().get(RedisKeyUtil.stockKey(scenario.scheduleId()))).isEqualTo("50");
         assertThat(reservationRepository.countByScheduleId(scenario.scheduleId())).isZero();
         assertThat(paymentRepository.countByScheduleId(scenario.scheduleId())).isZero();
+    }
+
+    private String adminToken() {
+        User admin = userRepository.save(User.createAdmin(
+                "stock-admin-" + System.nanoTime() + "@test.com",
+                "password",
+                "stock-admin"));
+        return jwtProvider.createToken(admin.getId(), admin.getEmail());
     }
 
     private Scenario createScenarioWithStatuses() {

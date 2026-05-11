@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     email       VARCHAR(255) NOT NULL UNIQUE,
     password    VARCHAR(255) NOT NULL,
     nickname    VARCHAR(100) NOT NULL,
+    role        VARCHAR(20) NOT NULL DEFAULT 'USER',
     created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 );
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(120);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'USER';
 
 -- 인덱스
 CREATE INDEX IF NOT EXISTS idx_seats_schedule_status ON seats(schedule_id, status);
