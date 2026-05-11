@@ -56,6 +56,7 @@ class DistributedLockConcurrencyTest {
     private Long scheduleId;
     private Long targetSeatId;
     private List<Long> userIds;
+    private List<String> queueTokens;
 
     @BeforeEach
     void setUp() {
@@ -77,6 +78,7 @@ class DistributedLockConcurrencyTest {
 
         // 10명의 사용자 생성 + 대기열 토큰 발급
         userIds = new ArrayList<>();
+        queueTokens = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             User user = User.create(
                     "dist-lock-" + System.nanoTime() + "-" + i + "@test.com",
@@ -88,7 +90,7 @@ class DistributedLockConcurrencyTest {
 
             // 대기열 진입 + 토큰 발급 (토큰 검증을 위해)
             queueService.enter(user.getId(), scheduleId);
-            queueService.issueToken(user.getId(), scheduleId);
+            queueTokens.add(queueService.issueToken(user.getId(), scheduleId).token());
         }
     }
 
@@ -103,10 +105,12 @@ class DistributedLockConcurrencyTest {
 
         for (int i = 0; i < threadCount; i++) {
             final Long userId = userIds.get(i);
+            final String queueToken = queueTokens.get(i);
+            final String idempotencyKey = "distributed-concurrency-" + userId + "-" + System.nanoTime();
             executor.submit(() -> {
                 try {
-                    ReservationRequest request = new ReservationRequest(scheduleId, List.of(targetSeatId));
-                    reservationService.reserve(userId, request);
+                    ReservationRequest request = new ReservationRequest(scheduleId, List.of(targetSeatId), queueToken);
+                    reservationService.reserve(userId, request, idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     failCount.incrementAndGet();

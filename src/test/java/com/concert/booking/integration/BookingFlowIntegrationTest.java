@@ -5,8 +5,10 @@ import com.concert.booking.domain.*;
 import com.concert.booking.dto.auth.LoginRequest;
 import com.concert.booking.dto.auth.SignupRequest;
 import com.concert.booking.dto.payment.PaymentRequest;
+import com.concert.booking.dto.queue.QueueEnterRequest;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.repository.*;
+import com.concert.booking.service.reservation.SeatReleaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,15 +22,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "kafka.consumer.seat-release-group=seat-release-booking-flow")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
@@ -40,6 +42,8 @@ class BookingFlowIntegrationTest {
     @Autowired private ConcertScheduleRepository concertScheduleRepository;
     @Autowired private SeatRepository seatRepository;
     @Autowired private ReservationRepository reservationRepository;
+    @Autowired private OutboxEventRepository outboxEventRepository;
+    @Autowired private SeatReleaseService seatReleaseService;
 
     private String token;
     private Long concertId;
@@ -49,6 +53,8 @@ class BookingFlowIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        outboxEventRepository.deleteAll();
+
         // 테스트 데이터 생성
         Concert concert = Concert.create("테스트 콘서트", "설명", "테스트 장소", "테스트 아티스트");
         concertRepository.save(concert);
@@ -99,9 +105,10 @@ class BookingFlowIntegrationTest {
                 .andExpect(jsonPath("$").isArray());
 
         // 3. 예매 (2석)
-        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId1, seatId2));
+        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId1, seatId2), issueQueueToken());
         MvcResult reserveResult = mockMvc.perform(post("/api/reservations")
                         .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", "flow-reservation-" + System.nanoTime())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reservationRequest)))
                 .andExpect(status().isCreated())
@@ -122,6 +129,7 @@ class BookingFlowIntegrationTest {
         PaymentRequest paymentRequest = new PaymentRequest(reservationId);
         mockMvc.perform(post("/api/payments")
                         .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", "flow-payment-" + System.nanoTime())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(paymentRequest)))
                 .andExpect(status().isCreated())
@@ -141,9 +149,10 @@ class BookingFlowIntegrationTest {
     @DisplayName("예매 취소 흐름: 예매 → 취소 → 좌석 반환")
     void cancel_reservation_flow() throws Exception {
         // 예매
-        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId1));
+        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId1), issueQueueToken());
         MvcResult reserveResult = mockMvc.perform(post("/api/reservations")
                         .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", "cancel-reservation-" + System.nanoTime())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reservationRequest)))
                 .andExpect(status().isCreated())
@@ -156,6 +165,8 @@ class BookingFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
+        seatReleaseService.releaseHeldSeats(reservationId, "USER_CANCELLED");
+
         // 좌석 상태 확인: AVAILABLE
         Seat seat = seatRepository.findById(seatId1).orElseThrow();
         assertThat(seat.getStatus()).isEqualTo(SeatStatus.AVAILABLE);
@@ -163,5 +174,22 @@ class BookingFlowIntegrationTest {
         // 예매 상태 확인: CANCELLED
         Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+    }
+
+    private String issueQueueToken() throws Exception {
+        QueueEnterRequest enterRequest = new QueueEnterRequest(scheduleId);
+        mockMvc.perform(post("/api/queue/enter")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(enterRequest)))
+                .andExpect(status().isCreated());
+
+        MvcResult result = mockMvc.perform(get("/api/queue/token")
+                        .header("Authorization", "Bearer " + token)
+                        .param("scheduleId", String.valueOf(scheduleId)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
     }
 }

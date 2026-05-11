@@ -25,12 +25,13 @@ class QueueServiceTest {
     @Autowired private QueueService queueService;
     @Autowired private RedisTemplate<String, String> redisTemplate;
 
-    private static final Long SCHEDULE_ID = 999L;
+    private Long scheduleId;
 
     @BeforeEach
     void setUp() {
+        scheduleId = System.nanoTime();
         // 테스트마다 대기열 초기화
-        redisTemplate.delete("queue:schedule:" + SCHEDULE_ID);
+        redisTemplate.delete("queue:schedule:" + scheduleId);
     }
 
     @Test
@@ -38,7 +39,7 @@ class QueueServiceTest {
     void enter_and_get_position() {
         Long userId = 1L;
 
-        QueuePositionResponse response = queueService.enter(userId, SCHEDULE_ID);
+        QueuePositionResponse response = queueService.enter(userId, scheduleId);
 
         assertThat(response.position()).isEqualTo(1);
         assertThat(response.totalWaiting()).isEqualTo(1);
@@ -49,8 +50,8 @@ class QueueServiceTest {
     void duplicate_entry_prevention() {
         Long userId = 1L;
 
-        queueService.enter(userId, SCHEDULE_ID);
-        QueuePositionResponse second = queueService.enter(userId, SCHEDULE_ID);
+        queueService.enter(userId, scheduleId);
+        QueuePositionResponse second = queueService.enter(userId, scheduleId);
 
         assertThat(second.position()).isEqualTo(1);
         assertThat(second.totalWaiting()).isEqualTo(1);
@@ -61,14 +62,14 @@ class QueueServiceTest {
     void issue_and_validate_token() {
         Long userId = 1L;
 
-        queueService.enter(userId, SCHEDULE_ID);
-        QueueTokenResponse tokenResponse = queueService.issueToken(userId, SCHEDULE_ID);
+        queueService.enter(userId, scheduleId);
+        QueueTokenResponse tokenResponse = queueService.issueToken(userId, scheduleId);
 
         assertThat(tokenResponse.token()).isNotNull();
-        assertThat(tokenResponse.scheduleId()).isEqualTo(SCHEDULE_ID);
+        assertThat(tokenResponse.scheduleId()).isEqualTo(scheduleId);
 
         // 토큰 검증 성공
-        boolean valid = queueService.validateToken(userId, SCHEDULE_ID, tokenResponse.token());
+        boolean valid = queueService.validateToken(userId, scheduleId, tokenResponse.token());
         assertThat(valid).isTrue();
     }
 
@@ -77,14 +78,14 @@ class QueueServiceTest {
     void token_single_use() {
         Long userId = 1L;
 
-        queueService.enter(userId, SCHEDULE_ID);
-        QueueTokenResponse tokenResponse = queueService.issueToken(userId, SCHEDULE_ID);
+        queueService.enter(userId, scheduleId);
+        QueueTokenResponse tokenResponse = queueService.issueToken(userId, scheduleId);
 
         // 토큰 소비
-        queueService.consumeToken(userId, SCHEDULE_ID);
+        queueService.consumeToken(userId, scheduleId);
 
         // 소비 후 검증 실패
-        boolean valid = queueService.validateToken(userId, SCHEDULE_ID, tokenResponse.token());
+        boolean valid = queueService.validateToken(userId, scheduleId, tokenResponse.token());
         assertThat(valid).isFalse();
     }
 
@@ -92,12 +93,22 @@ class QueueServiceTest {
     @DisplayName("순위 > threshold → 토큰 발급 실패")
     void token_issue_fails_when_not_ready() {
         // 101명을 대기열에 추가
-        for (long i = 1; i <= 101; i++) {
-            queueService.enter(i, SCHEDULE_ID);
+        for (long i = 1; i <= 100; i++) {
+            queueService.enter(i, scheduleId);
         }
+        sleepUntilNextMillisecond();
+        queueService.enter(101L, scheduleId);
 
         // 101번째 유저는 토큰 발급 불가
-        assertThatThrownBy(() -> queueService.issueToken(101L, SCHEDULE_ID))
+        assertThatThrownBy(() -> queueService.issueToken(101L, scheduleId))
                 .isInstanceOf(QueueNotReadyException.class);
+    }
+
+    private void sleepUntilNextMillisecond() {
+        try {
+            Thread.sleep(2);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

@@ -1,18 +1,17 @@
 package com.concert.booking.config;
 
-import com.concert.booking.common.util.RedisKeyUtil;
 import com.concert.booking.domain.Concert;
 import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.Seat;
 import com.concert.booking.repository.ConcertRepository;
 import com.concert.booking.repository.ConcertScheduleRepository;
 import com.concert.booking.repository.SeatRepository;
+import com.concert.booking.service.stock.RedisStockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +29,7 @@ public class DataInitializer implements ApplicationRunner {
     private final ConcertRepository concertRepository;
     private final ConcertScheduleRepository concertScheduleRepository;
     private final SeatRepository seatRepository;
-    private final RedisTemplate<String, String> redisTemplate;
+    private final RedisStockService redisStockService;
 
     @Override
     @Transactional
@@ -89,10 +88,7 @@ public class DataInitializer implements ApplicationRunner {
 
         seatRepository.saveAll(seats);
 
-        // Redis 재고 초기화 (분산 락 전략용)
-        redisTemplate.opsForValue().set(
-                RedisKeyUtil.stockKey(schedule.getId()),
-                String.valueOf(totalSeats)
-        );
+        // Redis stock은 DB AVAILABLE 좌석 수 기준으로 초기화한다.
+        redisStockService.initialize(schedule.getId(), false);
     }
 }

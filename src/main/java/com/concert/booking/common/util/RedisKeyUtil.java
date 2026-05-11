@@ -15,6 +15,11 @@ public final class RedisKeyUtil {
         return "token:queue:" + userId + ":" + scheduleId;
     }
 
+    // 입장 토큰 동시 사용 방지
+    public static String tokenInFlightKey(Long userId, Long scheduleId) {
+        return tokenKey(userId, scheduleId) + ":inflight";
+    }
+
     // 활성 처리 카운터
     public static String activeKey(Long scheduleId) {
         return "active:schedule:" + scheduleId;

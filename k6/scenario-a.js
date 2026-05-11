@@ -6,8 +6,8 @@
  */
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
-import { CONCERT_ID, SCHEDULE_ID, VUS } from './config.js';
-import { getSeats, reserve, resetData, setupUsers } from './helpers.js';
+import { SCHEDULE_ID, VUS } from './config.js';
+import { getSeats, reserve, resetLoadTestData, setupUsers, summary } from './helpers.js';
 
 const successCount = new Counter('reservation_success');
 const failCount = new Counter('reservation_fail');
@@ -27,20 +27,20 @@ export const options = {
 };
 
 export function setup() {
-    // 1. 데이터 리셋
-    resetData(SCHEDULE_ID);
+    // 1. 부하 테스트 fixture 리셋
+    const fixture = resetLoadTestData(SCHEDULE_ID, VUS);
 
-    // 2. 사용자 생성
-    const users = setupUsers(VUS, `scenario-a-${Date.now()}`);
+    // 2. reset endpoint가 보장한 deterministic 사용자 로그인
+    const users = setupUsers(VUS);
 
     // 3. 좌석 1개 ID 확보 (첫 번째 유저의 토큰으로 조회)
-    const seatsRes = getSeats(users[0].token, CONCERT_ID, SCHEDULE_ID);
+    const seatsRes = getSeats(users[0].token, fixture.concertId, SCHEDULE_ID);
     const seats = JSON.parse(seatsRes.body);
     const targetSeatId = seats.find(s => s.status === 'AVAILABLE').id;
 
     console.log(`[Setup] 사용자 ${users.length}명 생성, 타겟 좌석 ID: ${targetSeatId}`);
 
-    return { users, targetSeatId };
+    return { users, targetSeatId, concertId: fixture.concertId };
 }
 
 export default function (data) {
@@ -58,8 +58,10 @@ export default function (data) {
 }
 
 export function teardown(data) {
+    const finalSummary = summary(SCHEDULE_ID);
     console.log(`[Teardown] Scenario A 완료`);
     console.log(`- VU 수: ${VUS}`);
     console.log(`- 타겟 좌석 ID: ${data.targetSeatId}`);
+    console.log(`- 최종 예약 수: ${finalSummary.reservationCount}, Redis stock: ${finalSummary.redisStock}`);
     console.log('- 결과: k6 메트릭에서 reservation_success ≤ 1 확인');
 }

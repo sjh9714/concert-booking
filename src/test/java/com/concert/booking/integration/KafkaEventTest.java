@@ -5,7 +5,9 @@ import com.concert.booking.domain.*;
 import com.concert.booking.dto.payment.PaymentRequest;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.repository.*;
+import com.concert.booking.service.queue.QueueService;
 import com.concert.booking.service.payment.PaymentService;
+import com.concert.booking.service.outbox.OutboxRelayService;
 import com.concert.booking.service.reservation.ReservationService;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -41,7 +43,10 @@ class KafkaEventTest {
     @Autowired private ConcertScheduleRepository concertScheduleRepository;
     @Autowired private SeatRepository seatRepository;
     @Autowired private ReservationRepository reservationRepository;
+    @Autowired private OutboxEventRepository outboxEventRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private QueueService queueService;
+    @Autowired private OutboxRelayService outboxRelayService;
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -52,6 +57,8 @@ class KafkaEventTest {
 
     @BeforeEach
     void setUp() {
+        outboxEventRepository.deleteAll();
+
         User user = User.create(
                 "kafka-test-" + System.nanoTime() + "@test.com",
                 passwordEncoder.encode("password123"),
@@ -76,8 +83,12 @@ class KafkaEventTest {
     @DisplayName("결제 완료 시 reservation.completed 이벤트가 Kafka에 발행된다")
     void payment_publishes_completed_event() {
         // 예매 생성
-        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId));
-        var reservationResponse = reservationService.reserve(userId, reservationRequest);
+        String queueToken = issueToken(userId, scheduleId);
+        ReservationRequest reservationRequest = new ReservationRequest(scheduleId, List.of(seatId), queueToken);
+        var reservationResponse = reservationService.reserve(
+                userId,
+                reservationRequest,
+                "kafka-reservation-" + System.nanoTime());
 
         // Kafka Consumer 생성 (테스트용)
         Properties props = new Properties();
@@ -95,7 +106,8 @@ class KafkaEventTest {
 
             // 결제 실행
             PaymentRequest paymentRequest = new PaymentRequest(reservationResponse.id());
-            paymentService.pay(userId, paymentRequest);
+            paymentService.pay(userId, paymentRequest, "kafka-payment-" + System.nanoTime());
+            outboxRelayService.publishPendingBatch(1000);
 
             // 이벤트 수신 확인 (최대 15초 대기)
             ConsumerRecords<String, String> records = ConsumerRecords.empty();
@@ -116,5 +128,10 @@ class KafkaEventTest {
         // 예매 상태 확인: CONFIRMED
         Reservation reservation = reservationRepository.findById(reservationResponse.id()).orElseThrow();
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+    }
+
+    private String issueToken(Long userId, Long scheduleId) {
+        queueService.enter(userId, scheduleId);
+        return queueService.issueToken(userId, scheduleId).token();
     }
 }

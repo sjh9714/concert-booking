@@ -9,6 +9,7 @@ import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.repository.ConcertRepository;
 import com.concert.booking.repository.ConcertScheduleRepository;
 import com.concert.booking.repository.SeatRepository;
+import com.concert.booking.service.queue.QueueService;
 import com.concert.booking.service.reservation.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,10 +49,12 @@ class OptimisticLockConcurrencyTest {
     @Autowired private ConcertScheduleRepository concertScheduleRepository;
     @Autowired private SeatRepository seatRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private QueueService queueService;
 
     private Long scheduleId;
     private Long targetSeatId;
     private List<Long> userIds;
+    private List<String> queueTokens;
 
     @BeforeEach
     void setUp() {
@@ -69,6 +72,7 @@ class OptimisticLockConcurrencyTest {
 
         // 10명의 사용자 생성
         userIds = new ArrayList<>();
+        queueTokens = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             User user = User.create(
                     "optimistic-" + System.nanoTime() + "-" + i + "@test.com",
@@ -77,6 +81,9 @@ class OptimisticLockConcurrencyTest {
             );
             userRepository.save(user);
             userIds.add(user.getId());
+
+            queueService.enter(user.getId(), scheduleId);
+            queueTokens.add(queueService.issueToken(user.getId(), scheduleId).token());
         }
     }
 
@@ -91,10 +98,12 @@ class OptimisticLockConcurrencyTest {
 
         for (int i = 0; i < threadCount; i++) {
             final Long userId = userIds.get(i);
+            final String queueToken = queueTokens.get(i);
+            final String idempotencyKey = "optimistic-concurrency-" + userId + "-" + System.nanoTime();
             executor.submit(() -> {
                 try {
-                    ReservationRequest request = new ReservationRequest(scheduleId, List.of(targetSeatId));
-                    reservationService.reserve(userId, request);
+                    ReservationRequest request = new ReservationRequest(scheduleId, List.of(targetSeatId), queueToken);
+                    reservationService.reserve(userId, request, idempotencyKey);
                     successCount.incrementAndGet();
                 } catch (Exception e) {
                     failCount.incrementAndGet();

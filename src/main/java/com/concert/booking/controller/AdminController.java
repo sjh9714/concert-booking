@@ -1,14 +1,17 @@
 package com.concert.booking.controller;
 
 import com.concert.booking.common.util.RedisKeyUtil;
-import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.Seat;
 import com.concert.booking.repository.*;
+import com.concert.booking.service.kafka.DltReplayService;
+import com.concert.booking.service.stock.RedisStockService;
+import com.concert.booking.service.stock.StockReconciliationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,19 +27,24 @@ import java.util.Set;
 public class AdminController {
 
     private final PaymentRepository paymentRepository;
+    private final ReservationIdempotencyKeyRepository reservationIdempotencyKeyRepository;
     private final ReservationSeatRepository reservationSeatRepository;
     private final ReservationRepository reservationRepository;
     private final SeatRepository seatRepository;
     private final ConcertScheduleRepository concertScheduleRepository;
     private final RedisTemplate<String, String> redisTemplate;
+    private final DltReplayService dltReplayService;
+    private final RedisStockService redisStockService;
+    private final StockReconciliationService stockReconciliationService;
 
     @PostMapping("/reset")
     @Transactional
     public ResponseEntity<Void> resetData(@RequestParam Long scheduleId) {
         log.info("데이터 리셋 시작: scheduleId={}", scheduleId);
 
-        // 1. FK 순서대로 삭제: payments → reservation_seats → reservations
+        // 1. FK 순서대로 삭제: payments → idempotency keys → reservation_seats → reservations
         paymentRepository.deleteByScheduleId(scheduleId);
+        reservationIdempotencyKeyRepository.deleteByScheduleId(scheduleId);
         reservationSeatRepository.deleteByScheduleId(scheduleId);
         reservationRepository.deleteByScheduleId(scheduleId);
 
@@ -48,9 +56,31 @@ public class AdminController {
 
         // 4. Redis 초기화
         resetRedis(scheduleId);
+        redisStockService.initialize(scheduleId, true);
 
         log.info("데이터 리셋 완료: scheduleId={}", scheduleId);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/dlt/replay")
+    public ResponseEntity<DltReplayService.ReplayResult> replayDlt(
+            @RequestParam String topic,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(dltReplayService.replay(topic, limit));
+    }
+
+    @PostMapping("/schedules/{scheduleId}/stock/initialize")
+    public ResponseEntity<RedisStockService.StockSnapshot> initializeStock(
+            @PathVariable Long scheduleId,
+            @RequestParam(defaultValue = "false") boolean overwrite) {
+        return ResponseEntity.ok(redisStockService.initialize(scheduleId, overwrite));
+    }
+
+    @PostMapping("/schedules/{scheduleId}/stock/reconcile")
+    public ResponseEntity<StockReconciliationService.ReconciliationResult> reconcileStock(
+            @PathVariable Long scheduleId,
+            @RequestParam(defaultValue = "false") boolean repair) {
+        return ResponseEntity.ok(stockReconciliationService.reconcile(scheduleId, repair));
     }
 
     private void resetRedis(Long scheduleId) {
@@ -73,13 +103,6 @@ public class AdminController {
             redisTemplate.delete(tokenKeys);
         }
 
-        // 재고 재설정 (분산 락 전략용)
-        ConcertSchedule schedule = concertScheduleRepository.findById(scheduleId).orElse(null);
-        if (schedule != null) {
-            redisTemplate.opsForValue().set(
-                    RedisKeyUtil.stockKey(scheduleId),
-                    String.valueOf(schedule.getTotalSeats())
-            );
-        }
+        // stock 재설정은 resetData()에서 DB AVAILABLE 좌석 수 기준으로 수행한다.
     }
 }

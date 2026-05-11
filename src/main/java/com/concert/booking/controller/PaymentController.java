@@ -21,13 +21,16 @@ public class PaymentController {
     @PostMapping
     public ResponseEntity<PaymentResponse> pay(
             @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody PaymentRequest request) {
-        PaymentResponse response = paymentService.pay(userDetails.getUserId(), request);
+        PaymentResponse response = paymentService.pay(userDetails.getUserId(), request, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<PaymentResponse> getPayment(@PathVariable Long id) {
-        return ResponseEntity.ok(paymentService.getPayment(id));
+    public ResponseEntity<PaymentResponse> getPayment(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(paymentService.getPayment(userDetails.getUserId(), id));
     }
 }

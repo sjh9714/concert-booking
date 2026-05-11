@@ -66,7 +66,7 @@ public class Reservation {
 
     // PENDING → CONFIRMED (결제 완료 시)
     public void confirm() {
-        if (this.status != ReservationStatus.PENDING) {
+        if (!canConfirm()) {
             throw new IllegalStateException("대기 중인 예매만 확정할 수 있습니다. 현재 상태: " + this.status);
         }
         this.status = ReservationStatus.CONFIRMED;
@@ -75,7 +75,7 @@ public class Reservation {
 
     // PENDING → CANCELLED (사용자 취소)
     public void cancel() {
-        if (this.status != ReservationStatus.PENDING) {
+        if (!canCancel()) {
             throw new IllegalStateException("대기 중인 예매만 취소할 수 있습니다. 현재 상태: " + this.status);
         }
         this.status = ReservationStatus.CANCELLED;
@@ -83,16 +83,35 @@ public class Reservation {
 
     // PENDING → EXPIRED (만료 처리)
     public void expire() {
+        expire(LocalDateTime.now());
+    }
+
+    public void expire(LocalDateTime now) {
         if (this.status != ReservationStatus.PENDING) {
             throw new IllegalStateException("대기 중인 예매만 만료 처리할 수 있습니다. 현재 상태: " + this.status);
+        }
+        if (!canExpire(now)) {
+            throw new IllegalStateException("expiresAt이 지나지 않은 예매는 만료 처리할 수 없습니다. expiresAt: " + this.expiresAt);
         }
         this.status = ReservationStatus.EXPIRED;
     }
 
-    public boolean isExpired() {
+    public boolean canConfirm() {
+        return this.status == ReservationStatus.PENDING;
+    }
+
+    public boolean canCancel() {
+        return this.status == ReservationStatus.PENDING;
+    }
+
+    public boolean canExpire(LocalDateTime now) {
         return this.status == ReservationStatus.PENDING
                 && this.expiresAt != null
-                && LocalDateTime.now().isAfter(this.expiresAt);
+                && !now.isBefore(this.expiresAt);
+    }
+
+    public boolean isExpired() {
+        return canExpire(LocalDateTime.now());
     }
 
     public void addReservationSeat(ReservationSeat reservationSeat) {

@@ -69,4 +69,11 @@ public class ConcertSchedule {
     public void increaseAvailableSeats(int count) {
         this.availableSeats += count;
     }
+
+    public void syncAvailableSeats(int availableCount) {
+        if (availableCount < 0 || availableCount > this.totalSeats) {
+            throw new IllegalArgumentException("availableSeats는 0 이상 totalSeats 이하이어야 합니다.");
+        }
+        this.availableSeats = availableCount;
+    }
 }

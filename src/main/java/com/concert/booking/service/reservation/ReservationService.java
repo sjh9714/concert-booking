@@ -8,9 +8,9 @@ import java.util.List;
 
 public interface ReservationService {
 
-    ReservationResponse reserve(Long userId, ReservationRequest request);
+    ReservationResponse reserve(Long userId, ReservationRequest request, String idempotencyKey);
 
-    ReservationDetailResponse getReservation(Long reservationId);
+    ReservationDetailResponse getReservation(Long userId, Long reservationId);
 
     List<ReservationResponse> getMyReservations(Long userId);
 

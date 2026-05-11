@@ -1,614 +1,377 @@
-# Concert Booking 설계 문서
+# Design
 
-## 1. 프로젝트 개요
+Concert Booking은 고동시성 콘서트 예매 상황에서 좌석 정합성, 입장 제어, 결제/만료 race, 이벤트 발행 실패를 다루는 Spring Boot 백엔드입니다. 이 문서는 현재 코드와 테스트로 확인된 설계를 기준으로 작성합니다.
 
-**"1만 명이 동시에 1,000석을 예매할 때 정합성을 어떻게 보장할 것인가"**
+## 1. System Overview
 
-콘서트 좌석 예매 시스템을 통해 동시성 제어를 깊게 탐구하는 프로젝트.
-비관적 락 → 낙관적 락 → Redis 분산 락 3가지 전략을 단계적으로 구현하고,
-k6 부하 테스트로 각 전략의 성능과 정합성을 정량 비교한다.
-
-### 핵심 기술 챌린지
-
-| 챌린지 | 문제 | 목표 |
-|--------|------|------|
-| **동시 예매 정합성** | 1,000명이 동시에 같은 좌석 예매 시 overselling | 중복 예매 0건, 3가지 락 전략 비교 |
-| **대기열 시스템** | 1만 명 동시 접속 시 서버 과부하 | Redis Sorted Set + SSE로 순차 입장 |
-| **좌석 임시 점유** | 결제 지연 시 좌석이 영원히 잠김 | Redis TTL 5분, 미결제 시 자동 해제 |
-| **분산 환경 동시성** | 서버 2대에서 DB 락만으로 불충분 | Redisson 분산 락으로 크로스 서버 정합성 |
-| **성능 측정** | 락 전략 간 성능 차이 정량화 | k6로 동일 시나리오 3회 측정, Before/After 비교 |
-
----
-
-## 2. 기술 스택
-
-| 영역 | 기술 | 선택 이유 |
-|------|------|-----------|
-| Runtime | Java 21, Spring Boot 3.4.x | 가상 스레드로 동시 요청 처리 효율화, LTS |
-| DB | PostgreSQL 16 | 비관적/낙관적 락 지원, 기존 경험 활용 |
-| 분산 락 | Redis + Redisson | RLock 추상화, Pub/Sub 기반 락 해제 알림 |
-| 대기열 | Redis Sorted Set | O(log N) 삽입/순위 조회, TTL 지원 |
-| 실시간 알림 | SSE (Server-Sent Events) | 대기열 순번 단방향 전송, WebSocket 대비 경량 |
-| 이벤트 | Apache Kafka (KRaft) | 예매 완료/취소 이벤트, DLT 장애 복구 |
-| 테스트 | Testcontainers, k6 | 통합 테스트, 부하 테스트 |
-| 모니터링 | Prometheus, Grafana | 커스텀 메트릭 (예매 성공률, 락 경합률) |
-| 인프라 | Docker Compose | 로컬 개발 환경 통합 |
-
----
-
-## 3. 아키텍처
-
-```
-┌──────────────┐
-│   Client     │
-│  (Browser)   │
-└──────┬───────┘
-       │ REST API + SSE
-       ▼
-┌──────────────────────────────────────────┐
-│         Spring Boot Cluster              │
-│  ┌────────────┐    ┌────────────┐        │
-│  │  App-1     │    │  App-2     │        │
-│  │  :8081     │    │  :8082     │        │
-│  └─────┬──────┘    └─────┬──────┘        │
-│        │   Redisson 분산 락   │           │
-└────────┼─────────────────────┼───────────┘
-         │                     │
-    ┌────▼─────────────────────▼────┐
-    │           Redis               │
-    │  분산 락 · 대기열 · 좌석 점유    │
-    └────────────┬──────────────────┘
-                 │
-    ┌────────────▼──────────────────┐
-    │         PostgreSQL            │
-    │  비관적/낙관적 락 · 데이터 저장   │
-    └────────────┬──────────────────┘
-                 │
-    ┌────────────▼──────────────────┐
-    │      Kafka (KRaft)            │
-    │  예매 완료/취소 이벤트 · DLT     │
-    └───────────────────────────────┘
+```mermaid
+flowchart LR
+    Client["Client"] --> API["REST API + SSE"]
+    API --> App["Spring Boot Application"]
+    App --> Postgres["PostgreSQL<br/>Reservation, Seat, Payment, Outbox"]
+    App --> Redis["Redis<br/>Queue, Token, Hold, Stock, Redisson Lock"]
+    App --> Scheduler["Expiration Scheduler<br/>ShedLock"]
+    App --> Relay["Outbox Relay"]
+    Relay --> Kafka["Kafka"]
+    Kafka --> SeatConsumer["SeatReleaseConsumer"]
+    SeatConsumer --> Postgres
+    SeatConsumer --> Redis
+    DLT["*.DLT"] --> Replay["Manual DLT Replay"]
+    Replay --> Kafka
 ```
 
----
+역할을 일부러 나눴습니다. 예매 서비스는 좌석 선점과 상태 전이에 집중하고, Kafka consumer는 취소/만료 이후 좌석 반환을 멱등적으로 처리합니다. Redis stock은 빠른 선검증용이고, 최종 정합성 기준은 DB입니다.
 
-## 4. ERD
+## 2. Data Model
 
 ```mermaid
 erDiagram
-    users ||--o{ reservations : "예매"
-    concerts ||--o{ concert_schedules : "스케줄"
-    concert_schedules ||--o{ seats : "좌석"
-    concert_schedules ||--o{ reservations : "예매"
-    reservations ||--o{ reservation_seats : "좌석 배정"
-    seats ||--o{ reservation_seats : "예매됨"
-    reservations ||--o| payments : "결제"
+    users ||--o{ reservations : owns
+    concerts ||--o{ concert_schedules : has
+    concert_schedules ||--o{ seats : has
+    concert_schedules ||--o{ reservations : receives
+    reservations ||--o{ reservation_seats : contains
+    seats ||--o{ reservation_seats : assigned
+    reservations ||--o| payments : paid_by
+    reservations ||--o| reservation_idempotency_keys : replayed_by
 
     users {
-        bigserial id PK
-        varchar email UK "NOT NULL"
-        varchar password "NOT NULL"
-        varchar nickname "NOT NULL"
-        timestamp created_at "NOT NULL"
-    }
-
-    concerts {
-        bigserial id PK
-        varchar title "NOT NULL"
-        text description
-        varchar venue "NOT NULL"
-        varchar artist "NOT NULL"
-        timestamp created_at "NOT NULL"
+        bigint id PK
+        varchar email UK
+        varchar password
+        varchar nickname
     }
 
     concert_schedules {
-        bigserial id PK
-        bigint concert_id FK "NOT NULL → concerts"
-        date schedule_date "NOT NULL"
-        time start_time "NOT NULL"
-        int total_seats "NOT NULL"
-        int available_seats "NOT NULL (동시성 제어 대상)"
-        bigint version "DEFAULT 0 (낙관적 락)"
-        timestamp created_at "NOT NULL"
+        bigint id PK
+        bigint concert_id FK
+        int total_seats
+        int available_seats
+        bigint version
     }
 
     seats {
-        bigserial id PK
-        bigint schedule_id FK "NOT NULL → concert_schedules"
-        varchar section "NOT NULL (A, B, VIP 등)"
-        int row_number "NOT NULL"
-        int seat_number "NOT NULL"
-        int price "NOT NULL"
-        varchar status "DEFAULT 'AVAILABLE' (AVAILABLE, HELD, RESERVED)"
-        bigint version "DEFAULT 0 (낙관적 락)"
-        timestamp created_at "NOT NULL"
+        bigint id PK
+        bigint schedule_id FK
+        varchar status
+        bigint version
     }
 
     reservations {
-        bigserial id PK
-        uuid reservation_key UK "NOT NULL (멱등성)"
-        bigint user_id FK "NOT NULL → users"
-        bigint schedule_id FK "NOT NULL → concert_schedules"
-        varchar status "NOT NULL (PENDING, CONFIRMED, CANCELLED, EXPIRED)"
-        int total_amount "NOT NULL"
-        timestamp expires_at "임시 점유 만료 시간"
-        timestamp created_at "NOT NULL"
+        bigint id PK
+        uuid reservation_key UK
+        bigint user_id FK
+        bigint schedule_id FK
+        varchar status
+        int total_amount
+        timestamp expires_at
     }
 
-    reservation_seats {
-        bigserial id PK
-        bigint reservation_id FK "NOT NULL → reservations"
-        bigint seat_id FK "NOT NULL → seats"
+    reservation_idempotency_keys {
+        bigint id PK
+        bigint user_id
+        bigint schedule_id
+        varchar idempotency_key
+        varchar request_hash
+        varchar status
+        bigint reservation_id FK
     }
 
     payments {
-        bigserial id PK
-        uuid payment_key UK "NOT NULL"
-        bigint reservation_id FK "NOT NULL → reservations"
-        int amount "NOT NULL"
-        varchar status "NOT NULL (PENDING, COMPLETED, FAILED, REFUNDED)"
-        timestamp created_at "NOT NULL"
+        bigint id PK
+        uuid payment_key UK
+        bigint reservation_id FK
+        varchar idempotency_key
+        int amount
+        varchar status
     }
 ```
 
-### 주요 제약 조건
+중요한 DB 제약:
 
-| 테이블 | 제약 | 목적 |
-|--------|------|------|
-| seats | UK(schedule_id, section, row_number, seat_number) | 같은 스케줄 내 좌석 중복 방지 |
-| seats | version 컬럼 | 낙관적 락 |
-| concert_schedules | version 컬럼 | 잔여 좌석 수 낙관적 락 |
-| reservations | UK(reservation_key) | 멱등성 보장 |
-| reservation_seats | UK(reservation_id, seat_id) | 같은 예매에 같은 좌석 중복 배정 방지 |
-| payments | UK(payment_key) | 결제 멱등성 |
+| 제약 | 목적 |
+| --- | --- |
+| `reservation_idempotency_keys(user_id, schedule_id, idempotency_key)` unique | 같은 예매 재시도 중복 생성 방지 |
+| `payments(reservation_id, idempotency_key)` unique | 같은 결제 재시도 replay |
+| `payments(reservation_id)` unique | 다른 idempotency key로 같은 예매를 중복 결제하는 경로 차단 |
+| `reservation_seats(reservation_id, seat_id)` unique | 같은 예매 안에서 같은 좌석 중복 배정 방지 |
+| `seats(schedule_id, section, row_number, seat_number)` unique | 같은 공연 일정의 좌석 중복 생성 방지 |
 
-### 다좌석 예매 정책
+## 3. Reservation State
 
-- 한 예매 당 최대 4석까지 선택 가능 (`reservation_seats` 중간 테이블)
-- **All-or-Nothing**: 요청한 좌석 중 하나라도 AVAILABLE이 아니면 전체 예매 실패
-  - 부분 성공을 허용하면 유저 혼란 (2석 중 1석만 잡힘) + 보상 트랜잭션 복잡도 증가
-  - 실패 시 즉시 `SeatNotAvailableException` 반환, 유저가 다른 좌석을 선택하도록 유도
-- 다좌석 예매 시 데드락 방지: 좌석 ID 오름차순 정렬 후 락 획득
-
-### 인덱스 전략
-
-| 인덱스 | 컬럼 | 쿼리 |
-|--------|------|------|
-| idx_seats_schedule_status | (schedule_id, status) | 스케줄별 예매 가능 좌석 조회 |
-| idx_reservations_user_id | (user_id) | 내 예매 목록 |
-| idx_reservations_status_expires | (status, expires_at) | 만료 예매 스캔 (스케줄러) |
-| idx_reservation_seats_reservation | (reservation_id) | 예매별 좌석 조회 |
-| idx_reservation_seats_seat | (seat_id) | 좌석별 예매 조회 |
-
----
-
-## 5. API 설계
-
-### 인증
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/auth/signup` | 회원가입 |
-| POST | `/api/auth/login` | 로그인 (JWT 발급) |
-
-### 콘서트
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| GET | `/api/concerts` | 콘서트 목록 |
-| GET | `/api/concerts/{id}` | 콘서트 상세 |
-| GET | `/api/concerts/{id}/schedules` | 스케줄 목록 |
-| GET | `/api/concerts/{id}/schedules/{scheduleId}/seats` | 좌석 현황 (구역별) |
-
-### 대기열
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/queue/enter` | 대기열 진입 (scheduleId) |
-| GET | `/api/queue/position` | 대기 순번 조회 |
-| GET | `/api/queue/events` | SSE 실시간 순번 스트림 |
-| GET | `/api/queue/token` | 입장 토큰 발급 (순번 도달 시) |
-
-### 예매
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/reservations` | 좌석 예매 (입장 토큰 + 좌석 ID 목록) |
-| GET | `/api/reservations/{id}` | 예매 상세 |
-| GET | `/api/reservations/my` | 내 예매 목록 |
-| DELETE | `/api/reservations/{id}` | 예매 취소 |
-
-### 결제
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/payments` | 결제 요청 (예매 확정) |
-| GET | `/api/payments/{id}` | 결제 상세 |
-
----
-
-## 6. 동시성 제어 전략 (핵심)
-
-### 6.1 전략 1: 비관적 락 (Pessimistic Lock)
-
-```sql
--- 좌석에 대해 배타적 잠금 (ID 정렬로 데드락 방지)
-SELECT * FROM seats
-WHERE id IN (1, 2, 3) AND status = 'AVAILABLE'
-ORDER BY id
-FOR UPDATE;
-
--- 잠금 획득 후 상태 변경
-UPDATE seats SET status = 'HELD' WHERE id IN (1, 2, 3);
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: reserve seats
+    PENDING --> CONFIRMED: payment success
+    PENDING --> CANCELLED: user cancel
+    PENDING --> EXPIRED: expiration scheduler
+    CONFIRMED --> [*]
+    CANCELLED --> [*]
+    EXPIRED --> [*]
 ```
 
-- **장점**: 구현 단순, 정합성 확실
-- **단점**: 잠금 대기로 처리량 저하, 데드락 가능 (좌석 ID 정렬로 완화)
-- **적합**: 동시 요청 수가 적은 경우
+허용하는 전이는 `PENDING`에서 시작하는 세 가지뿐입니다.
 
-### 6.2 전략 2: 낙관적 락 (Optimistic Lock)
+| 전이 | 트리거 | 보호 방식 |
+| --- | --- | --- |
+| `PENDING -> CONFIRMED` | 결제 성공 | `ReservationRepository.findByIdForUpdate()` |
+| `PENDING -> CANCELLED` | 사용자 취소 | `ReservationCancellationService`에서 row lock |
+| `PENDING -> EXPIRED` | 만료 스케줄러 | id별 별도 트랜잭션과 row lock |
 
-```java
-@Entity
-public class Seat {
-    @Version
-    private Long version;
-    // ...
-}
+`CONFIRMED`는 취소/만료로 바뀌지 않고, `CANCELLED`/`EXPIRED`는 결제로 확정되지 않습니다. 중복 취소와 중복 만료는 좌석/재고를 다시 올리지 않도록 no-op 또는 상태 예외로 처리합니다.
+
+## 4. Queue And Admission Token
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as Queue API
+    participant R as Redis
+    participant RS as ReservationService
+
+    U->>API: POST /api/queue/enter(scheduleId)
+    API->>R: ZADD NX queue:schedule:{scheduleId} userId score
+    U->>API: GET /api/queue/token?scheduleId=...
+    API->>R: ZRANK queue:schedule:{scheduleId} userId
+    API->>R: SET token:queue:{userId}:{scheduleId} uuid EX 300
+    API-->>U: queueToken
+    U->>RS: POST /api/reservations(queueToken, seatIds)
+    RS->>R: GET token:queue:{userId}:{scheduleId}
+    RS->>R: SETNX token:queue:{userId}:{scheduleId}:inflight
+    RS-->>U: reservation response
+    RS->>R: after commit DEL token + inflight
 ```
 
-```java
-// 재시도 로직
-@Retryable(
-    retryFor = OptimisticLockingFailureException.class,
-    maxAttempts = 3,
-    backoff = @Backoff(delay = 50, multiplier = 2)
-)
-public ReservationResponse reserve(ReservationRequest request) {
-    // version 불일치 시 OptimisticLockingFailureException → 재시도
-}
+토큰 정책:
+
+- `ReservationRequest.queueToken`은 필수입니다.
+- Redis key는 `token:queue:{userId}:{scheduleId}`입니다.
+- 요청 token 값이 Redis 저장 값과 같아야 합니다.
+- 다른 사용자나 다른 schedule의 token은 실패합니다.
+- 예매 성공 후에만 token을 삭제합니다.
+- 예매 실패 시 token은 남겨서 사용자가 다른 좌석으로 다시 시도할 수 있게 합니다.
+- 동시 재사용은 inflight key의 `SETNX + TTL`로 막습니다.
+
+## 5. Reservation Success Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant RS as ReservationService
+    participant ID as ReservationIdempotencyService
+    participant Q as QueueTokenGuard
+    participant Lock as Lock Strategy
+    participant DB as PostgreSQL
+    participant Redis as Redis
+    participant OB as Outbox
+
+    C->>RS: POST /api/reservations + Idempotency-Key
+    RS->>ID: claimOrReplay(userId, scheduleId, key, seatIds)
+    alt completed same request
+        ID-->>RS: existing ReservationResponse
+        RS-->>C: replay response
+    else new request
+        RS->>RS: validate seatIds: 1..4, no duplicates
+        RS->>Q: validate and acquire token inflight
+        RS->>Lock: lock and hold seats
+        Lock->>DB: Seat AVAILABLE -> HELD
+        Lock->>DB: Reservation PENDING + reservation_seats
+        Lock->>Redis: SET hold:seat:{seatId} reservationId EX 300
+        Lock->>OB: save RESERVATION_CREATED
+        RS->>ID: complete claim
+        RS->>Q: after commit consume token
+        RS-->>C: ReservationResponse
+    end
 ```
 
-- **장점**: 잠금 대기 없음, 처리량 높음
-- **단점**: 충돌 시 재시도 비용, 높은 경합에서 재시도 폭발
-- **적합**: 충돌 빈도가 낮은 경우
+세 예매 전략은 같은 API 계약을 공유합니다. 차이는 좌석과 schedule 재고를 보호하는 방식입니다.
 
-### 6.3 전략 3: Redis 분산 락 (Redisson) — 최종 전략
+## 6. Lock Strategy Comparison
 
-```java
-public ReservationResponse reserveWithDistributedLock(ReservationRequest request) {
-    // 1단계: Redis 재고 선검증 (atomic decrement)
-    Long remaining = redisTemplate.opsForValue()
-        .decrement("stock:schedule:" + scheduleId);
-    if (remaining < 0) {
-        redisTemplate.opsForValue().increment("stock:schedule:" + scheduleId);
-        throw new SoldOutException();
-    }
+| 전략 | 직렬화 지점 | 장점 | 한계 | 검증 |
+| --- | --- | --- | --- | --- |
+| Pessimistic Lock | DB `SELECT ... FOR UPDATE` | 결과가 직관적이고 높은 경합에서 안정적 | 대기 요청이 DB connection과 row lock을 점유 | k6 A/B/C, 통합 테스트 |
+| Optimistic Lock | JPA `@Version` + 제한된 retry | 낮은 경합에서 lock wait가 적음 | 공유 row인 `ConcertSchedule.availableSeats` 충돌 시 성공률 하락 | k6 A/B/C |
+| Redis Distributed Lock | Redis stock pre-check + Redisson MultiLock + DB 확인 | 소진 이후 실패 요청을 DB 전에 차단 | Redis stock과 DB 불일치 가능, reconciliation 필요 | k6 A/B/C, stock failure tests |
 
-    // 2단계: 좌석별 분산 락 획득
-    List<RLock> locks = seatIds.stream()
-        .sorted()  // 데드락 방지
-        .map(id -> redissonClient.getLock("lock:seat:" + id))
-        .toList();
+분산 락 흐름:
 
-    RLock multiLock = redissonClient.getMultiLock(locks.toArray(new RLock[0]));
-
-    try {
-        if (multiLock.tryLock(3, 5, TimeUnit.SECONDS)) {
-            // 3단계: DB에서 좌석 상태 확인 + 변경
-            // ...
-        }
-    } finally {
-        multiLock.unlock();
-    }
-}
+```mermaid
+flowchart TD
+    A["reserve request"] --> B["Redis stock DECR"]
+    B -->|stock < 0| C["restore stock once<br/>SoldOutException"]
+    B -->|stock ok| D["Redisson MultiLock by sorted seatIds"]
+    D -->|lock fail| E["restore stock once"]
+    D -->|lock ok| F["DB transaction"]
+    F --> G["check seats AVAILABLE"]
+    G -->|fail| H["rollback<br/>restore stock once"]
+    G -->|success| I["Seat HELD + Reservation PENDING"]
+    I --> J["commit"]
+    J --> K["stock lease complete"]
+    D --> L["finally explicit unlock"]
 ```
 
-- **장점**: DB 부하 최소화, 분산 환경 지원, 빠른 실패 (재고 선검증)
-- **단점**: Redis 장애 시 대응 필요
-- **적합**: 대규모 동시 접속, 멀티 인스턴스
+`tryLock`의 `waitTime`은 락 획득을 기다리는 시간이고, `leaseTime`은 비정상 종료에 대비한 자동 해제 시간입니다. 정상 흐름에서는 `finally`에서 `unlock()`을 호출합니다.
 
-### 6.4 전략 비교 목표
+## 7. Payment And Expiration Race
 
-| 메트릭 | 비관적 락 | 낙관적 락 | Redis 분산 락 |
-|--------|-----------|-----------|--------------|
-| RPS | 측정 | 측정 | 측정 |
-| p50 응답시간 | 측정 | 측정 | 측정 |
-| p99 응답시간 | 측정 | 측정 | 측정 |
-| 성공률 | 측정 | 측정 | 측정 |
-| overselling | 0건 | 0건 | 0건 |
-| 데드락 발생 | ? | 없음 | 없음 |
+```mermaid
+sequenceDiagram
+    participant P as Payment Request
+    participant E as Expiration Scheduler
+    participant DB as PostgreSQL
+    participant OB as Outbox
 
-### 6.5 k6 부하 테스트 시나리오
-
-#### 시나리오 A: 핫시트 경합 (정합성 검증)
-
-- **목적**: 같은 좌석에 대한 동시 예매 시 overselling 0건 검증
-- **조건**: 1,000 VU가 동시에 **같은 좌석 1개**를 예매
-- **측정**: 성공 1건 + 실패 999건 확인, 응답시간 분포
-
-#### 시나리오 B: 분산 좌석 예매 (처리량 측정)
-
-- **목적**: 서로 다른 좌석을 예매할 때의 최대 처리량 측정
-- **조건**: 1,000 VU, 1,000석 → 각 VU가 서로 다른 좌석 1개 예매
-- **측정**: RPS, p50/p95/p99 응답시간, 전체 성공률
-
-#### 시나리오 C: 혼합 부하 (실제 트래픽 시뮬레이션)
-
-- **목적**: 실제 사용 패턴에 가까운 혼합 부하
-- **조건**: 1,000 VU, 좌석 조회(70%) + 예매 시도(30%), 인기 좌석 20%에 요청 80% 집중
-- **측정**: RPS, 응답시간, 에러율
-
-#### 공통 설정
-
-```
-- ramp-up: 0 → 1,000 VU (10초)
-- duration: 30초 (steady state)
-- 각 전략별 3회 반복 → 평균값 비교
-- 데이터 초기화: 각 실행 전 좌석 상태 AVAILABLE로 리셋
+    par payment
+        P->>DB: SELECT reservation FOR UPDATE
+        P->>DB: PENDING -> CONFIRMED
+        P->>DB: Seat HELD -> RESERVED
+        P->>OB: RESERVATION_CONFIRMED
+    and expiration
+        E->>DB: SELECT reservation FOR UPDATE
+        E->>DB: if still PENDING and expired then EXPIRED
+        E->>OB: RESERVATION_EXPIRED
+    end
 ```
 
----
+둘 중 먼저 row lock을 잡은 전이만 성공합니다. 결제가 먼저 성공하면 만료는 skip되고, 만료가 먼저 성공하면 결제는 상태 예외로 실패합니다. 이 정책은 `ReservationStateTransitionRaceIntegrationTest`에서 결제/만료, 결제/취소, 취소/만료 조합으로 검증합니다.
 
-## 7. 대기열 시스템
+## 8. Seat Release
 
-### 흐름
+좌석 반환은 취소/만료 상태 전이 트랜잭션에서 직접 하지 않습니다. 상태 전이는 outbox event만 남기고, `SeatReleaseConsumer`가 이벤트를 받아 반환합니다.
 
-```
-1. 유저 → POST /api/queue/enter
-   → Redis ZADD NX queue:schedule:{id} {timestamp} {userId}
-   → NX: 이미 대기 중이면 무시 (중복 진입·순번 조작 방지)
-
-2. 유저 → GET /api/queue/events (SSE 연결)
-   → 매 1초 ZRANK로 순위 전송
-   → 현재 순위, 앞에 대기 인원, 예상 대기 시간
-
-3. 순위 ≤ threshold (예: 100등 이내)
-   → GET /api/queue/token → 입장 토큰 (UUID, TTL 5분)
-
-4. 유저 → POST /api/reservations (Authorization: Bearer {JWT}, X-Queue-Token: {token})
-   → 토큰 유효성 검증 후 예매 진행
-```
-
-### 입장 토큰 검증
-
-```
-검증 항목:
-1. 토큰 존재 여부  → Redis GET token:queue:{userId}:{scheduleId}
-2. 토큰 값 일치    → 요청 헤더의 토큰 == Redis 저장 값 (위조 방지)
-3. 스케줄 바인딩   → 토큰 key에 scheduleId 포함 → 다른 스케줄에 사용 불가
-4. 유저 바인딩     → 토큰 key에 userId 포함 → JWT의 userId와 대조
-5. 1회 사용       → 예매 성공 시 Redis DEL → 같은 토큰으로 재예매 불가
+```mermaid
+flowchart TD
+    A["reservation.cancelled event"] --> B["SeatReleaseConsumer"]
+    B --> C["SeatReleaseService.releaseHeldSeats"]
+    C --> D["load reservation seats"]
+    D --> E{"seat.status == HELD?"}
+    E -->|yes| F["seat AVAILABLE<br/>releasedCount++"]
+    E -->|no| G["skip"]
+    F --> H{"releasedCount > 0?"}
+    H -->|yes| I["schedule.availableSeats += releasedCount<br/>Redis stock += releasedCount"]
+    H -->|no| J["do not restore stock"]
+    I --> K["delete seatHoldKey if exists"]
+    J --> K
 ```
 
-- 토큰 = UUID v4 (추측 불가)
-- Redis TTL 5분으로 자동 만료
-- 토큰 없이 예매 API 호출 시 `QueueTokenRequiredException` 반환
+이벤트가 중복 도착해도 `HELD` 좌석만 반환하므로 `availableSeats`와 Redis stock이 중복 증가하지 않습니다. `RESERVED` 좌석은 취소/만료 이벤트로 반환하지 않습니다.
 
-### Redis 자료구조
+## 9. Outbox Event Flow
 
-```
-# 대기열 (Sorted Set)
-queue:schedule:1  →  {userId1: 1707350400.123, userId2: 1707350400.456, ...}
+```mermaid
+sequenceDiagram
+    participant S as Domain Service
+    participant DB as PostgreSQL
+    participant Relay as OutboxRelayService
+    participant Kafka as Kafka
 
-# 입장 토큰 (String + TTL) — userId + scheduleId로 바인딩
-token:queue:{userId}:{scheduleId}  →  {uuid}  TTL 300초
-
-# 활성 처리 카운터 (현재 예매 진행 중인 인원)
-active:schedule:1  →  42
-```
-
----
-
-## 8. 좌석 임시 점유 (Seat Hold)
-
-### 흐름
-
-```
-1. 예매 요청 → 좌석 상태: AVAILABLE → HELD
-   → Redis SET hold:seat:{seatId} {reservationId} EX 300 (5분)
-   → Reservation status: PENDING, expires_at: now + 5분
-
-2-A. 5분 내 결제 완료
-     → 좌석 상태: HELD → RESERVED
-     → Reservation status: PENDING → CONFIRMED
-     → Redis DEL hold:seat:{seatId}
-     → Kafka 발행: reservation.completed 이벤트 (알림, 통계, active 카운터 감소)
-
-2-B. 5분 초과 미결제
-     → 스케줄러: expired reservation 스캔 (ShedLock으로 단일 실행)
-     → Reservation status: PENDING → EXPIRED
-     → Kafka 발행: reservation.cancelled 이벤트
-     → Consumer(seat-release): 좌석 상태 HELD → AVAILABLE + available_seats 복원
+    S->>DB: business changes
+    S->>DB: INSERT outbox_events(status=PENDING)
+    DB-->>S: commit
+    Relay->>DB: SELECT PENDING/FAILED FOR UPDATE SKIP LOCKED
+    Relay->>Kafka: publish typed event
+    alt publish success
+        Relay->>DB: status=PUBLISHED, publishedAt
+    else publish failure
+        Relay->>DB: status=FAILED, retryCount++, lastError
+    end
 ```
 
-### 만료 처리 방식
+이벤트 매핑:
 
-- **스케줄러** (`@Scheduled(fixedRate = 30000)`)
-  - 30초마다 `status = PENDING AND expires_at < now()` 스캔
-  - 만료된 예매의 status를 EXPIRED로 변경 → `reservation.cancelled` Kafka 이벤트 발행
-  - 좌석 반환은 Kafka Consumer(`seat-release`)가 처리 (섹션 9 참고)
-- **서버 2대 중복 실행 방지**: ShedLock (Redis 기반)으로 스케줄러 단일 실행 보장
-  - `@SchedulerLock(name = "expireReservations", lockAtLeastFor = "10s", lockAtMostFor = "30s")`
-- Redis TTL은 빠른 중복 점유 방지용 (스케줄러 + Kafka Consumer가 DB 상태를 최종 정리)
+| Outbox eventType | Kafka topic | 용도 |
+| --- | --- | --- |
+| `RESERVATION_CREATED` | `reservation.created` | 예매 생성 이벤트 |
+| `RESERVATION_CONFIRMED` | `reservation.completed` | 결제 확정 이벤트 |
+| `RESERVATION_CANCELLED` | `reservation.cancelled` | 사용자 취소 좌석 반환 요청 |
+| `RESERVATION_EXPIRED` | `reservation.cancelled` | 만료 좌석 반환 요청 |
 
----
+Outbox는 exactly-once를 보장하지 않습니다. 목적은 DB commit 이후 publish 실패로 이벤트가 사라지는 구간을 줄이는 것입니다. 중복 발행 가능성은 consumer 멱등성으로 흡수합니다.
 
-## 9. Kafka 이벤트
+## 10. DLT Replay Flow
 
-### 왜 Kafka인가?
+```mermaid
+sequenceDiagram
+    participant Kafka as Kafka
+    participant Consumer as SeatReleaseConsumer
+    participant DLT as reservation.cancelled.DLT
+    participant Admin as Admin API
+    participant Replay as DltReplayService
 
-예매 취소/만료 시 좌석 반환은 **반드시 실행되어야 하는 부수 효과**다.
-동기 처리 시 DB 업데이트 + Redis 캐시 갱신 + 재고 복원이 하나라도 실패하면 좌석이 영구 잠금 상태가 된다.
-
-- **서버 2대 환경**: App-1에서 취소 요청 → App-2도 Redis 재고를 알아야 함. Spring Event는 단일 JVM 한정
-- **장애 시 재처리 보장**: Consumer 실패 시 Kafka offset이 전진하지 않아 자동 재시도. DLT로 최종 실패 격리
-- **관심사 분리**: 예매 서비스는 이벤트만 발행, 좌석 반환/알림/통계는 각각의 Consumer가 독립 처리
-
-### 토픽
-
-| 토픽 | 파티션 | key | 용도 |
-|------|--------|-----|------|
-| `reservation.completed` | 3 | reservationId | 예매 확정 → 알림, 통계, 대기열 active 카운터 감소 |
-| `reservation.cancelled` | 3 | reservationId | 예매 취소/만료 → 좌석 반환, Redis 재고 복원, 통계 |
-
-### Consumer Group
-
-| 그룹 | 토픽 | 역할 |
-|------|------|------|
-| seat-release | reservation.cancelled | 좌석 상태 AVAILABLE 복원 + Redis 재고 increment + available_seats 증가 |
-| reservation-notification | reservation.completed | 예매 확정 알림 (로그) |
-| reservation-stats | reservation.completed/cancelled | 통계 수집 |
-
-### 장애 복구
-
-- **manual commit**: 처리 완료 후 offset commit → Consumer 장애 시 미처리 메시지 재소비
-- **DLT (Dead Letter Topic)**: 3회 재시도 실패 시 `*.DLT` 토픽으로 격리, 운영자 수동 처리
-- **멱등성**: reservationId 기반 중복 처리 방지 (좌석 상태가 이미 AVAILABLE이면 skip)
-
----
-
-## 10. 패키지 구조
-
-```
-src/main/java/com/concert/booking/
-├── config/          # Redis, Kafka, Security, Scheduler 설정
-├── controller/      # REST API + SSE
-├── service/
-│   ├── reservation/ # 예매 서비스 (3가지 락 전략)
-│   ├── queue/       # 대기열 서비스
-│   ├── payment/     # 결제 서비스
-│   └── concert/     # 콘서트/스케줄/좌석 서비스
-├── consumer/        # Kafka Consumer
-├── domain/          # Entity
-├── repository/      # JPA Repository
-├── dto/             # 요청/응답 DTO
-├── event/           # Kafka 이벤트 스키마
-└── common/          # JWT, 예외 처리, 분산 락 유틸
+    Kafka->>Consumer: reservation.cancelled
+    Consumer--xKafka: processing failure
+    Kafka->>DLT: after retry, publish with DLT headers
+    Admin->>Replay: POST /api/admin/dlt/replay?topic=reservation.cancelled.DLT&limit=10
+    Replay->>DLT: read DLT records
+    Replay->>Kafka: republish to original topic
+    Kafka->>Consumer: replayed message
 ```
 
----
+DLT topic은 Spring Kafka `DeadLetterPublishingRecoverer` 규칙으로 `원본토픽.DLT`를 사용합니다. 예: `reservation.cancelled.DLT`.
 
-## 11. 단계별 구현 계획
+`KafkaDltReplayIntegrationTest`는 다음을 확인합니다.
 
-### 1차: MVP (기본 예매 흐름)
+- Consumer 실패 메시지가 DLT로 이동합니다.
+- DLT record에 원본 topic/partition/offset/exception header가 남습니다.
+- replay 후 원본 topic으로 재발행됩니다.
+- 같은 DLT 메시지를 다시 replay해도 좌석/재고가 중복 복구되지 않습니다.
 
-| STEP | 내용 | 산출물 |
-|------|------|--------|
-| 1 | 프로젝트 스켈레톤 + Docker Compose (PostgreSQL, Redis, Kafka) | 빌드 가능한 빈 프로젝트 |
-| 2 | Entity + DDL (7개 테이블) | 도메인 모델, schema.sql |
-| 3 | JWT 인증 (signup, login) | 인증 API, JwtProvider |
-| 4 | 콘서트 CRUD + 좌석 조회 + 테스트 데이터 | 콘서트/스케줄/좌석 API |
-| 5 | 좌석 예매 — 비관적 락 (SELECT FOR UPDATE) | 예매 API (v1) |
-| 6 | 결제 + 예매 확정 (mock PG) | 결제 API |
-| 7 | 통합 테스트 (Testcontainers) | 기본 흐름 검증 |
+## 11. Redis Stock Reconciliation
 
-### 2차: 동시성 심화
+Redis stock은 빠른 선검증용 캐시입니다. DB가 기준입니다.
 
-| STEP | 내용 | 산출물 |
-|------|------|--------|
-| 8 | 비관적 락 k6 부하 테스트 (기준선 측정) | 성능 기준선 수치 |
-| 9 | 낙관적 락 구현 + k6 비교 테스트 | 전략 2 구현 + 비교 수치 |
-| 10 | Redis 분산 락 (Redisson) + k6 비교 테스트 | 전략 3 구현 + 비교 수치 |
-| 11 | 대기열 시스템 (Redis Sorted Set + SSE) | 대기열 API |
-| 12 | 좌석 임시 점유 (Redis TTL + 스케줄러) | 자동 해제 로직 |
-| 13 | k6 종합 부하 테스트 (1,000 VU 동시 예매) | 3가지 전략 비교표 |
+```mermaid
+flowchart LR
+    A["Seat.status AVAILABLE count"] --> R["StockReconciliationService"]
+    B["ConcertSchedule.availableSeats"] --> R
+    C["Redis stock:schedule:{id}"] --> R
+    R --> D["dry-run mismatch report"]
+    R --> E["repair=true<br/>sync schedule + Redis to DB AVAILABLE count"]
+```
 
-### 3차: 프로덕션 품질
+초기화 정책:
 
-| STEP | 내용 | 산출물 |
-|------|------|--------|
-| 14 | Kafka 이벤트 (예매 완료/취소) + DLT | Consumer, DLT |
-| 15 | 스케일아웃 (2대) + 분산 환경 동시성 테스트 | Dockerfile, docker-compose |
-| 16 | Prometheus + Grafana (커스텀 메트릭) | 대시보드 |
-| 17 | 성능 측정 결과 문서 | PERF_RESULT.md |
+- 로컬 fixture 생성 시 DB `AVAILABLE` 좌석 수 기준으로 Redis stock을 초기화합니다.
+- `/api/admin/reset`과 load-test reset은 `overwrite=true`로 DB 기준 값을 씁니다.
+- `/api/admin/schedules/{scheduleId}/stock/initialize?overwrite=false`는 기존 key가 있으면 보존합니다.
+- 분산 예매 진입 시 stock key가 없으면 lazy init을 수행합니다.
+- 좌석 조회 API는 stock을 만들거나 덮어쓰지 않습니다.
 
----
+Reconciliation endpoint:
 
-## 12. Docker Compose 구성
+```text
+POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=false
+POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=true
+```
 
-| 서비스 | 이미지 | 포트 |
-|--------|--------|------|
-| app-1 | concert-booking | 8081 |
-| app-2 | concert-booking | 8082 |
-| PostgreSQL | postgres:16 | 5432 |
-| Redis | redis:7 | 6379 |
-| Kafka | apache/kafka:3.9.0 | 29092 |
-| Kafka UI | provectuslabs/kafka-ui | 8090 |
-| Prometheus | prom/prometheus | 9090 |
-| Grafana | grafana/grafana | 3000 |
+이 기능은 manual reconciliation utility입니다. 자동 운영 보정 기능으로 주장하지 않습니다.
 
----
+## 12. k6 Reproducibility
 
-## 13. 모니터링 메트릭
+부하 테스트 전용 reset endpoint는 `@Profile("!prod")`로 제한합니다.
 
-### Micrometer 커스텀 메트릭
+```text
+POST /api/admin/load-test/reset?scheduleId=1&userCount=200
+GET  /api/admin/load-test/summary?scheduleId=1
+POST /api/admin/load-test/reservations/{id}/expire
+POST /api/admin/load-test/tokens/expire?userId={id}&scheduleId={id}
+```
 
-| 메트릭 | 타입 | 태그 | 수집 위치 |
-|--------|------|------|-----------|
-| `reservation.attempt` | Counter | strategy, status(success/fail/soldout) | ReservationService |
-| `reservation.duration` | Timer | strategy | ReservationService |
-| `lock.acquire.duration` | Timer | strategy, lockType | 락 획득 구간 |
-| `lock.contention` | Counter | strategy | 락 획득 실패 (timeout/conflict) 시 |
-| `queue.size` | Gauge | scheduleId | QueueService (ZCARD) |
-| `queue.wait.duration` | Timer | scheduleId | 대기열 진입 → 토큰 발급 |
-| `seat.hold.expired` | Counter | — | 만료 스케줄러 |
-| `kafka.consume.lag` | Gauge | topic, group | Consumer lag |
+reset이 맞추는 상태:
 
-### Grafana 대시보드 패널 (계획)
+- 대상 schedule의 reservations, payments, idempotency, reservation_seats 삭제
+- 좌석 50개 `AVAILABLE`
+- `ConcertSchedule.availableSeats=50`
+- Redis stock=50
+- queue, active, token, inflight, seat hold key 삭제
+- `loadtest-user-{n}@k6.local` 사용자 보장
 
-1. **예매 성공/실패 비율** — `reservation.attempt` by status
-2. **락 전략별 응답시간 분포** — `reservation.duration` percentile by strategy
-3. **락 경합률** — `lock.contention` / `reservation.attempt`
-4. **대기열 현황** — `queue.size` 실시간
-5. **좌석 만료 해제 추이** — `seat.hold.expired` rate
+## 13. Boundaries
 
----
-
-## 14. 컨벤션
-
-- 한국어 주석, 영어 코드
-- DTO: `*Request`, `*Response`
-- 테스트: `*Test` (단위), `*IntegrationTest` (통합)
-- Entity: Lombok 최소화 (`@Getter`, `@NoArgsConstructor(access = PROTECTED)`)
-- 예외: 도메인별 커스텀 예외 (`SoldOutException`, `QueueNotReadyException` 등)
-
----
-
-## 15. 설계 결정 근거 (ADR)
-
-### ADR-1: 왜 3가지 락 전략을 모두 구현하는가?
-
-- **문제**: 동시성 제어는 trade-off가 명확하지만, 수치 없이는 "상황에 따라 다르다"라는 답밖에 못 함
-- **결정**: 동일 시나리오에서 3가지 전략을 정량 비교하여 각 전략의 적합 영역을 수치로 증명
-- **근거**: 실무에서 락 전략 선택은 예상 트래픽과 경합 빈도에 따라 달라짐. 비교 데이터가 있어야 설득력 있는 기술 선택 가능
-
-### ADR-2: 왜 대기열이 필요한가? (그냥 처리하면 안 되나?)
-
-- **문제**: 1만 명이 동시에 예매 API를 호출하면 DB 커넥션 풀 고갈 + 타임아웃 폭발
-- **결정**: Redis Sorted Set 기반 대기열로 동시 처리 인원을 제한 (예: 100명씩)
-- **대안 검토**: Rate Limiting만으로는 공정성 보장 불가 (먼저 온 유저가 먼저 처리되어야 함)
-
-### ADR-3: 왜 Kafka인가? (Spring Event + @Async로 충분하지 않나?)
-
-- **문제**: 예매 취소/만료 시 좌석 반환은 반드시 실행되어야 하는 부수 효과
-- **결정**: Kafka로 이벤트 발행, Consumer가 좌석 반환 처리
-- **Spring Event 대비 장점**:
-  - 서버 2대 환경에서 크로스 서버 이벤트 전파
-  - Consumer 장애 시 offset 기반 자동 재시도
-  - DLT로 최종 실패 격리 → 운영 가시성
-- **trade-off**: 인프라 복잡도 증가 → Docker Compose로 로컬 환경 단순화
-
-### ADR-4: Redis 장애 시 대응
-
-- **문제**: 분산 락, 대기열, 좌석 점유가 모두 Redis 의존
-- **결정**: Redis 장애 시 graceful degradation
-  - 분산 락 → DB 비관적 락으로 fallback (성능 저하 허용, 정합성 유지)
-  - 대기열 → 일시적으로 대기열 bypass, 직접 예매 허용 (서버 보호는 Rate Limiting으로)
-  - 좌석 점유 → DB `expires_at` + 스케줄러가 최종 보장 (Redis는 빠른 중복 방지용)
-
-### ADR-5: All-or-Nothing 다좌석 예매
-
-- **문제**: 3석 요청 중 2석만 가능할 때 어떻게 할 것인가?
-- **결정**: 전체 실패 (All-or-Nothing)
-- **근거**: 부분 성공 시 유저 혼란 (옆자리 안 잡힘) + 보상 트랜잭션 복잡도. 실패 시 즉시 피드백 → 유저가 다른 좌석 선택
+- 결제는 mock payment 즉시 성공 구조입니다.
+- Admin API는 로컬/포트폴리오 검증용입니다. 관리자 인증 모델은 별도 과제입니다.
+- Kafka replay는 manual utility입니다.
+- Redis 장애 자동 fallback은 구현하지 않았습니다.
+- k6 A/B/C 결과는 로컬 Docker 단일 실행 기준입니다.
+- D/E/F k6 시나리오는 script added, result pending입니다.

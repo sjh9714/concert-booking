@@ -24,14 +24,17 @@ public class ReservationController {
     @PostMapping
     public ResponseEntity<ReservationResponse> reserve(
             @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody ReservationRequest request) {
-        ReservationResponse response = reservationService.reserve(userDetails.getUserId(), request);
+        ReservationResponse response = reservationService.reserve(userDetails.getUserId(), request, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ReservationDetailResponse> getReservation(@PathVariable Long id) {
-        return ResponseEntity.ok(reservationService.getReservation(id));
+    public ResponseEntity<ReservationDetailResponse> getReservation(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(reservationService.getReservation(userDetails.getUserId(), id));
     }
 
     @GetMapping("/my")

@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS reservations (
     created_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS reservation_idempotency_keys (
+    id                BIGSERIAL PRIMARY KEY,
+    user_id           BIGINT NOT NULL REFERENCES users(id),
+    schedule_id       BIGINT NOT NULL REFERENCES concert_schedules(id),
+    idempotency_key   VARCHAR(120) NOT NULL,
+    request_hash      VARCHAR(64) NOT NULL,
+    status            VARCHAR(20) NOT NULL,
+    reservation_id    BIGINT REFERENCES reservations(id) ON DELETE SET NULL,
+    created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, schedule_id, idempotency_key)
+);
+
 CREATE TABLE IF NOT EXISTS reservation_seats (
     id              BIGSERIAL PRIMARY KEY,
     reservation_id  BIGINT NOT NULL REFERENCES reservations(id),
@@ -61,14 +74,45 @@ CREATE TABLE IF NOT EXISTS payments (
     id              BIGSERIAL PRIMARY KEY,
     payment_key     UUID NOT NULL UNIQUE,
     reservation_id  BIGINT NOT NULL REFERENCES reservations(id),
+    idempotency_key VARCHAR(120),
     amount          INT NOT NULL,
     status          VARCHAR(20) NOT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id              BIGSERIAL PRIMARY KEY,
+    aggregate_type  VARCHAR(80) NOT NULL,
+    aggregate_id    BIGINT NOT NULL,
+    event_type      VARCHAR(80) NOT NULL,
+    topic           VARCHAR(255) NOT NULL,
+    payload         TEXT NOT NULL,
+    status          VARCHAR(20) NOT NULL,
+    retry_count     INT NOT NULL DEFAULT 0,
+    locked_at       TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    published_at    TIMESTAMP,
+    last_error      TEXT
+);
+
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(120);
+
 -- 인덱스
 CREATE INDEX IF NOT EXISTS idx_seats_schedule_status ON seats(schedule_id, status);
 CREATE INDEX IF NOT EXISTS idx_reservations_user_id ON reservations(user_id);
 CREATE INDEX IF NOT EXISTS idx_reservations_status_expires ON reservations(status, expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_reservation_idempotency_scope
+    ON reservation_idempotency_keys(user_id, schedule_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_reservation_idempotency_reservation
+    ON reservation_idempotency_keys(reservation_id);
 CREATE INDEX IF NOT EXISTS idx_reservation_seats_reservation ON reservation_seats(reservation_id);
 CREATE INDEX IF NOT EXISTS idx_reservation_seats_seat ON reservation_seats(seat_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_payments_reservation_idempotency
+    ON payments(reservation_id, idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_payments_reservation
+    ON payments(reservation_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_publishable
+    ON outbox_events(status, locked_at, created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate
+    ON outbox_events(aggregate_type, aggregate_id);

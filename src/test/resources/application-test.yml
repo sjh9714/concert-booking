@@ -12,6 +12,14 @@ spring:
       repositories:
         enabled: false
 
+  kafka:
+    listener:
+      auto-startup: false
+
 jwt:
   secret: test-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm-test
   expiration: 3600000
+
+outbox:
+  relay:
+    enabled: false
