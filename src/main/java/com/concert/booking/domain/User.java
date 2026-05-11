@@ -26,6 +26,10 @@ public class User {
     @Column(nullable = false)
     private String nickname;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -39,6 +43,16 @@ public class User {
         user.email = email;
         user.password = password;
         user.nickname = nickname;
+        user.role = UserRole.USER;
+        return user;
+    }
+
+    public static User createAdmin(String email, String password, String nickname) {
+        User user = new User();
+        user.email = email;
+        user.password = password;
+        user.nickname = nickname;
+        user.role = UserRole.ADMIN;
         return user;
     }
 }

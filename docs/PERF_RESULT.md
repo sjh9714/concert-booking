@@ -22,7 +22,8 @@
 
 ## 2. Data Setup
 
-k6 스크립트는 같은 fixture에서 시작할 수 있도록 load-test reset endpoint를 사용합니다.
+k6 스크립트는 같은 fixture에서 시작할 수 있도록 `!prod` profile 전용 load-test reset endpoint를 사용합니다.
+일반 `/api/admin/**` utility는 `ROLE_ADMIN` 권한이 필요하지만, `/api/admin/load-test/**`는 로컬 부하 테스트 재현성을 위해 `!prod` profile에서만 인증 없이 노출됩니다.
 
 ```bash
 POST /api/admin/load-test/reset?scheduleId=1&userCount=200

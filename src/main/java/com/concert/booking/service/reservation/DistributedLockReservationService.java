@@ -97,7 +97,9 @@ public class DistributedLockReservationService implements ReservationService {
                                 .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
 
                         // 락 없는 일반 SELECT + All-or-Nothing 검증
-                        List<Seat> seats = seatRepository.findAllByIdInAndAvailable(sortedSeatIds);
+                        List<Seat> seats = seatRepository.findAllByScheduleIdAndIdInAndAvailable(
+                                request.scheduleId(),
+                                sortedSeatIds);
                         if (seats.size() != sortedSeatIds.size()) {
                             throw new SeatNotAvailableException("선택한 좌석 중 이미 예매된 좌석이 있습니다.");
                         }

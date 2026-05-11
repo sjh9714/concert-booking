@@ -21,12 +21,30 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     // 비관적 락: 좌석 ID 목록으로 AVAILABLE 좌석 조회 + FOR UPDATE
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")
-    List<Seat> findAllByIdInAndAvailableForUpdate(@Param("seatIds") List<Long> seatIds);
+    @Query("""
+            SELECT s
+            FROM Seat s
+            WHERE s.schedule.id = :scheduleId
+              AND s.id IN :seatIds
+              AND s.status = 'AVAILABLE'
+            ORDER BY s.id
+            """)
+    List<Seat> findAllByScheduleIdAndIdInAndAvailableForUpdate(
+            @Param("scheduleId") Long scheduleId,
+            @Param("seatIds") List<Long> seatIds);
 
     // 낙관적 락: 락 없이 AVAILABLE 좌석 조회 (커밋 시 @Version으로 충돌 감지)
-    @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")
-    List<Seat> findAllByIdInAndAvailable(@Param("seatIds") List<Long> seatIds);
+    @Query("""
+            SELECT s
+            FROM Seat s
+            WHERE s.schedule.id = :scheduleId
+              AND s.id IN :seatIds
+              AND s.status = 'AVAILABLE'
+            ORDER BY s.id
+            """)
+    List<Seat> findAllByScheduleIdAndIdInAndAvailable(
+            @Param("scheduleId") Long scheduleId,
+            @Param("seatIds") List<Long> seatIds);
 
     @Modifying
     @Query(nativeQuery = true,

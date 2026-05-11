@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Check collapsed files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          targets = (
+              list(Path("src").rglob("*.java"))
+              + list(Path("k6").rglob("*.js"))
+              + list(Path("k6").rglob("*.sh"))
+              + [Path("README.md"), Path("docs/DESIGN.md"), Path("docs/PERF_RESULT.md")]
+          )
+
+          bad = []
+          for path in targets:
+              if not path.exists():
+                  continue
+              lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+              if len(lines) <= 5:
+                  bad.append((str(path), len(lines)))
+
+          if bad:
+              print("Too-short or collapsed files:")
+              for row in bad:
+                  print(row)
+              raise SystemExit(1)
+
+          print("OK")
+          PY
+
+      - name: Check k6 script syntax
+        run: |
+          bash -n k6/run-all.sh
+          node --check k6/helpers.js
+          node --check k6/scenario-a.js
+          node --check k6/scenario-b.js
+          node --check k6/scenario-c.js
+          node --check k6/scenario-d.js
+          node --check k6/scenario-e.js
+          node --check k6/scenario-f.js
+
+      - name: Inspect k6 scenarios
+        run: |
+          for scenario in a b c d e f; do
+            docker run --rm \
+              -v "$PWD:/work" \
+              -w /work \
+              grafana/k6:1.5.0 inspect "k6/scenario-${scenario}.js"
+          done
+
+      - name: Test
+        run: ./gradlew test --no-daemon
+
+      - name: Build
+        run: ./gradlew build --no-daemon
