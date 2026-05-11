@@ -17,6 +17,8 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     List<Seat> findByScheduleIdAndStatus(Long scheduleId, SeatStatus status);
 
+    long countByScheduleIdAndStatus(Long scheduleId, SeatStatus status);
+
     // 비관적 락: 좌석 ID 목록으로 AVAILABLE 좌석 조회 + FOR UPDATE
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Seat s WHERE s.id IN :seatIds AND s.status = 'AVAILABLE' ORDER BY s.id")

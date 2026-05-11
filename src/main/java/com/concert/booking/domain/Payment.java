@@ -25,6 +25,9 @@ public class Payment {
     @JoinColumn(name = "reservation_id", nullable = false)
     private Reservation reservation;
 
+    @Column(name = "idempotency_key", nullable = false, length = 120)
+    private String idempotencyKey;
+
     @Column(nullable = false)
     private Integer amount;
 
@@ -40,10 +43,11 @@ public class Payment {
         this.createdAt = LocalDateTime.now();
     }
 
-    public static Payment create(Reservation reservation, int amount) {
+    public static Payment create(Reservation reservation, int amount, String idempotencyKey) {
         Payment payment = new Payment();
         payment.paymentKey = UUID.randomUUID();
         payment.reservation = reservation;
+        payment.idempotencyKey = idempotencyKey;
         payment.amount = amount;
         payment.status = PaymentStatus.COMPLETED;
         return payment;

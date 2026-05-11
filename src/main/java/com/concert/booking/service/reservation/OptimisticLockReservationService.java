@@ -1,6 +1,6 @@
 package com.concert.booking.service.reservation;
 
-import com.concert.booking.common.exception.InvalidReservationStateException;
+import com.concert.booking.common.exception.ForbiddenException;
 import com.concert.booking.common.exception.ReservationNotFoundException;
 import com.concert.booking.common.exception.SeatNotAvailableException;
 import com.concert.booking.domain.*;
@@ -8,16 +8,17 @@ import com.concert.booking.dto.concert.SeatResponse;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
-import com.concert.booking.event.ReservationCancelledEvent;
 import com.concert.booking.repository.*;
+import com.concert.booking.service.outbox.OutboxEventService;
+import com.concert.booking.service.queue.QueueTokenGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,7 +35,11 @@ public class OptimisticLockReservationService implements ReservationService {
     private final SeatRepository seatRepository;
     private final ReservationRepository reservationRepository;
     private final ReservationSeatRepository reservationSeatRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final QueueTokenGuard queueTokenGuard;
+    private final ReservationIdempotencyService reservationIdempotencyService;
+    private final TransactionTemplate transactionTemplate;
+    private final ReservationCancellationService reservationCancellationService;
+    private final OutboxEventService outboxEventService;
 
     @Override
     @Retryable(
@@ -42,8 +47,40 @@ public class OptimisticLockReservationService implements ReservationService {
             maxAttempts = 3,
             backoff = @Backoff(delay = 50, multiplier = 2)
     )
-    @Transactional
-    public ReservationResponse reserve(Long userId, ReservationRequest request) {
+    public ReservationResponse reserve(Long userId, ReservationRequest request, String idempotencyKey) {
+        ReservationIdempotencyService.ReservationClaim claim =
+                reservationIdempotencyService.claimOrReplay(userId, request.scheduleId(), idempotencyKey, request.seatIds());
+        if (claim.replay()) {
+            return claim.replayResponse();
+        }
+
+        QueueTokenGuard.TokenLease tokenLease = null;
+        boolean tokenConsumed = false;
+        boolean reservationCommitted = false;
+        try {
+            tokenLease = queueTokenGuard.acquire(userId, request.scheduleId(), request.queueToken());
+
+            ReservationResponse response = transactionTemplate.execute(status ->
+                    createReservation(userId, request, claim.claimId()));
+
+            reservationCommitted = true;
+            queueTokenGuard.consume(tokenLease);
+            tokenConsumed = true;
+
+            return response;
+        } catch (RuntimeException | Error e) {
+            if (tokenLease != null && !tokenConsumed) {
+                queueTokenGuard.release(tokenLease);
+            }
+            if (!reservationCommitted) {
+                reservationIdempotencyService.deleteProcessingClaim(claim.claimId());
+            }
+            throw e;
+        }
+        // 커밋 시 @Version 불일치 → ObjectOptimisticLockingFailureException → @Retryable 재시도
+    }
+
+    private ReservationResponse createReservation(Long userId, ReservationRequest request, Long claimId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
@@ -82,15 +119,21 @@ public class OptimisticLockReservationService implements ReservationService {
         // 잔여 좌석 감소
         schedule.decreaseAvailableSeats(seats.size());
 
+        reservationIdempotencyService.complete(claimId, reservation);
+        outboxEventService.saveReservationCreated(reservation);
+
         return ReservationResponse.from(reservation);
-        // 커밋 시 @Version 불일치 → ObjectOptimisticLockingFailureException → @Retryable 재시도
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ReservationDetailResponse getReservation(Long reservationId) {
+    public ReservationDetailResponse getReservation(Long userId, Long reservationId) {
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new ReservationNotFoundException("예매를 찾을 수 없습니다."));
+
+        if (!reservation.getUser().getId().equals(userId)) {
+            throw new ForbiddenException("본인의 예매만 조회할 수 있습니다.");
+        }
 
         List<SeatResponse> seats = reservation.getReservationSeats().stream()
                 .map(rs -> SeatResponse.from(rs.getSeat()))
@@ -108,46 +151,8 @@ public class OptimisticLockReservationService implements ReservationService {
     }
 
     @Override
-    @Transactional
     public void cancelReservation(Long userId, Long reservationId) {
-        Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new ReservationNotFoundException("예매를 찾을 수 없습니다."));
-
-        if (!reservation.getUser().getId().equals(userId)) {
-            throw new InvalidReservationStateException("본인의 예매만 취소할 수 있습니다.");
-        }
-
-        if (reservation.getStatus() != ReservationStatus.PENDING) {
-            throw new InvalidReservationStateException("대기 중인 예매만 취소할 수 있습니다.");
-        }
-
-        reservation.cancel();
-
-        List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservationId);
-        for (ReservationSeat rs : reservationSeats) {
-            rs.getSeat().release();
-        }
-
-        reservation.getSchedule().increaseAvailableSeats(reservationSeats.size());
-
-        // Kafka 이벤트 발행 (알림/통계용)
-        try {
-            List<Long> seatIds = reservationSeats.stream()
-                    .map(rs -> rs.getSeat().getId())
-                    .toList();
-
-            ReservationCancelledEvent event = new ReservationCancelledEvent(
-                    reservation.getId(),
-                    reservation.getUser().getId(),
-                    reservation.getSchedule().getId(),
-                    seatIds,
-                    reservation.getTotalAmount(),
-                    "USER_CANCELLED"
-            );
-            kafkaTemplate.send("reservation.cancelled",
-                    String.valueOf(reservation.getId()), event);
-        } catch (Exception e) {
-            log.warn("예매 취소 이벤트 발행 실패: reservationId={}", reservationId, e);
-        }
+        reservationCancellationService.cancel(userId, reservationId);
     }
+
 }
