@@ -1100,8 +1100,8 @@ public void handleCancelledReservation(ReservationCancelledEvent event, Acknowle
 | `enable-auto-commit` | `false` | 수동 커밋 → 처리 완료 후에만 오프셋 이동 |
 | `auto-offset-reset` | `earliest` | Consumer 재시작 시 처음부터 읽기 |
 
-DLT 메시지는 `/api/admin/dlt/replay`로 원본 topic에 수동 replay할 수 있다.
-이 Admin API는 로컬/포트폴리오 검증용 utility이며, 운영 인증 모델은 별도 과제다.
+DLT 메시지는 `ROLE_ADMIN` 권한으로 `/api/admin/dlt/replay`를 호출해 원본 topic에 수동 replay할 수 있다.
+이 Admin API는 manual recovery utility이며, admin 계정 발급/운영 절차는 별도 과제다.
 
 ### 멱등성 (Idempotency)
 

@@ -91,7 +91,9 @@ public class OptimisticLockReservationService implements ReservationService {
         List<Long> sortedSeatIds = request.seatIds().stream().sorted().toList();
 
         // 락 없이 좌석 조회 (커밋 시 @Version으로 충돌 감지)
-        List<Seat> seats = seatRepository.findAllByIdInAndAvailable(sortedSeatIds);
+        List<Seat> seats = seatRepository.findAllByScheduleIdAndIdInAndAvailable(
+                request.scheduleId(),
+                sortedSeatIds);
 
         // All-or-Nothing
         if (seats.size() != sortedSeatIds.size()) {
