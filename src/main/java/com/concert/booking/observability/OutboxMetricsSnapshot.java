@@ -25,7 +25,7 @@ public class OutboxMetricsSnapshot {
 
     @Scheduled(
             fixedDelayString = "${management.metrics.outbox.gauge-refresh-ms:30000}",
-            initialDelayString = "${management.metrics.outbox.gauge-initial-delay-ms:30000}"
+            initialDelayString = "${management.metrics.outbox.gauge-initial-delay-ms:0}"
     )
     @Transactional(readOnly = true)
     public void refresh() {
