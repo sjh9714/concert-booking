@@ -2,6 +2,7 @@ package com.concert.booking.service.reservation;
 
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.service.queue.QueueTokenGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,8 +18,18 @@ public class ReservationOrchestrator {
     private final ReservationIdempotencyService reservationIdempotencyService;
     private final ReservationCreationService reservationCreationService;
     private final TransactionTemplate transactionTemplate;
+    private final BookingMetrics bookingMetrics;
 
     public ReservationResponse reserve(
+            Long userId,
+            ReservationRequest request,
+            String idempotencyKey,
+            SeatReservationStrategy strategy
+    ) {
+        return bookingMetrics.recordReservation(() -> reserveInternal(userId, request, idempotencyKey, strategy));
+    }
+
+    private ReservationResponse reserveInternal(
             Long userId,
             ReservationRequest request,
             String idempotencyKey,

@@ -22,6 +22,7 @@ flowchart LR
 
 역할을 일부러 나눴습니다. 예매 서비스는 좌석 선점과 상태 전이에 집중하고, Kafka consumer는 취소/만료 이후 좌석 반환을 멱등적으로 처리합니다. Redis stock은 빠른 선검증용이고, 최종 정합성 기준은 DB입니다.
 좌석 조회는 항상 요청 `scheduleId`와 `seatIds`를 함께 조건으로 걸어, 다른 공연 일정의 좌석이 예매에 섞이지 않도록 합니다.
+DB 스키마는 JPA 자동 생성이 아니라 `src/main/resources/db/migration`의 Flyway migration으로 관리합니다.
 
 ## 2. Data Model
 
@@ -272,12 +273,13 @@ sequenceDiagram
     S->>DB: business changes
     S->>DB: INSERT outbox_events(status=PENDING)
     DB-->>S: commit
-    Relay->>DB: SELECT PENDING/FAILED FOR UPDATE SKIP LOCKED
+    Relay->>DB: SELECT due PENDING/FAILED FOR UPDATE SKIP LOCKED
     Relay->>Kafka: publish typed event
     alt publish success
         Relay->>DB: status=PUBLISHED, publishedAt
     else publish failure
-        Relay->>DB: status=FAILED, retryCount++, lastError
+        Relay->>DB: retryCount++, lastError, nextAttemptAt
+        Relay->>DB: status=FAILED or DEAD after max retry
     end
 ```
 
@@ -289,6 +291,10 @@ sequenceDiagram
 | `RESERVATION_CONFIRMED` | `reservation.completed` | 결제 확정 이벤트 |
 | `RESERVATION_CANCELLED` | `reservation.cancelled` | 사용자 취소 좌석 반환 요청 |
 | `RESERVATION_EXPIRED` | `reservation.cancelled` | 만료 좌석 반환 요청 |
+
+Relay는 `PENDING` 이벤트와 `nextAttemptAt`이 지난 `FAILED` 이벤트만 가져옵니다. publish 실패 시
+`retryCount`를 증가시키고 exponential backoff로 다음 시도 시간을 기록합니다. 설정된 최대 재시도 횟수에
+도달하면 이벤트는 `DEAD` 상태가 되어 자동 relay 대상에서 제외됩니다.
 
 Outbox는 exactly-once를 보장하지 않습니다. 목적은 DB commit 이후 publish 실패로 이벤트가 사라지는 구간을 줄이는 것입니다. 중복 발행 가능성은 consumer 멱등성으로 흡수합니다.
 

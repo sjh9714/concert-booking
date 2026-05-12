@@ -65,6 +65,7 @@ queue enter
 | DB final consistency | Redis stock은 캐시입니다. 최종 기준은 DB `Seat.status = AVAILABLE` count입니다. |
 | 좌석은 요청 schedule에 속해야 함 | 세 락 전략 모두 schedule-bound seat query를 사용합니다. |
 | `Idempotency-Key` | 사용자 더블클릭, timeout 이후 재요청, 결제 재시도를 DB unique constraint로 막습니다. |
+| Flyway migrations | JPA DDL 자동 생성과 `schema.sql` init 대신 versioned SQL migration으로 스키마를 관리합니다. |
 | Outbox Pattern | DB commit과 Kafka publish 사이의 이벤트 유실 구간을 줄입니다. |
 | DLT + manual replay utility | Consumer 처리 실패를 격리하고, 로컬 검증용 수동 복구 경로를 제공합니다. |
 
@@ -144,6 +145,29 @@ SMOKE=1 STRATEGY=distributed SCENARIO=scenario-f VUS=1 bash k6/run-all.sh
 ```
 
 `run-all.sh` 결과는 `k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/`에 저장됩니다.
+
+## Observability
+
+Spring Boot Actuator와 Micrometer를 사용해 로컬 검증용 운영 지표를 노출합니다.
+
+| Endpoint | 접근 정책 |
+| --- | --- |
+| `/actuator/health` | 인증 없이 조회 가능 |
+| `/actuator/info` | 인증 없이 조회 가능 |
+| `/actuator/metrics` | `ROLE_ADMIN` 필요 |
+| `/actuator/prometheus` | `ROLE_ADMIN` 필요 |
+
+대표 metric:
+
+| 영역 | metric |
+| --- | --- |
+| 예매 | `concert.booking.reservation.attempts`, `concert.booking.reservation.success`, `concert.booking.reservation.failures`, `concert.booking.reservation.latency` |
+| 대기열 token | `concert.booking.queue.token.issued`, `concert.booking.queue.token.validation.failures`, `concert.booking.queue.token.inflight.conflicts` |
+| Outbox relay | `concert.booking.outbox.published`, `concert.booking.outbox.failed`, `concert.booking.outbox.dead`, `concert.booking.outbox.publish.latency`, `concert.booking.outbox.events` |
+| Stock reconciliation | `concert.booking.stock.reconciliation.runs`, `concert.booking.stock.reconciliation.mismatches`, `concert.booking.stock.reconciliation.repairs` |
+
+Outbox gauge는 scrape마다 DB를 조회하지 않고, 주기적으로 갱신한 pending/failed/dead count를 노출합니다. 이 섹션은 기본적인 관측 지표를 설명하며, alerting, dashboard, tracing, SLO 운영 체계까지 구현했다는 의미는 아닙니다.
+`/actuator/prometheus`는 `ROLE_ADMIN` 인증이 필요하므로 실제 Prometheus scrape 구성에는 bearer token 또는 internal network/auth 정책이 필요합니다.
 
 ## API Notes
 

@@ -24,10 +24,14 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.kafka:spring-kafka")
 
     // Database
+    implementation("org.flywaydb:flyway-core")
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
     // Redis + Redisson
     implementation("org.redisson:redisson-spring-boot-starter:3.40.2")
