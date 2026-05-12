@@ -63,6 +63,12 @@ public class OutboxEvent {
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
+    @Column(name = "next_attempt_at")
+    private LocalDateTime nextAttemptAt;
+
+    @Column(name = "dead_at")
+    private LocalDateTime deadAt;
+
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
@@ -88,14 +94,26 @@ public class OutboxEvent {
         this.publishedAt = now;
         this.lockedAt = null;
         this.lastError = null;
+        this.nextAttemptAt = null;
+        this.deadAt = null;
     }
 
-    public void markFailed(String error, LocalDateTime now) {
-        this.status = OutboxEventStatus.FAILED;
+    public void markFailed(String error, LocalDateTime now, LocalDateTime nextAttemptAt, int maxRetryCount) {
         this.retryCount += 1;
         this.lastError = truncate(error);
         this.lockedAt = null;
         this.updatedAt = now;
+
+        if (this.retryCount >= maxRetryCount) {
+            this.status = OutboxEventStatus.DEAD;
+            this.nextAttemptAt = null;
+            this.deadAt = now;
+            return;
+        }
+
+        this.status = OutboxEventStatus.FAILED;
+        this.nextAttemptAt = nextAttemptAt;
+        this.deadAt = null;
     }
 
     @PrePersist

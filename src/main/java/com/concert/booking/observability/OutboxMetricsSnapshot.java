@@ -16,11 +16,13 @@ public class OutboxMetricsSnapshot {
     private final OutboxEventRepository outboxEventRepository;
     private final AtomicLong pendingEvents = new AtomicLong();
     private final AtomicLong failedEvents = new AtomicLong();
+    private final AtomicLong deadEvents = new AtomicLong();
 
     public OutboxMetricsSnapshot(OutboxEventRepository outboxEventRepository, MeterRegistry meterRegistry) {
         this.outboxEventRepository = outboxEventRepository;
         registerGauge(meterRegistry, "pending", pendingEvents);
         registerGauge(meterRegistry, "failed", failedEvents);
+        registerGauge(meterRegistry, "dead", deadEvents);
     }
 
     @Scheduled(
@@ -31,6 +33,7 @@ public class OutboxMetricsSnapshot {
     public void refresh() {
         pendingEvents.set(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING));
         failedEvents.set(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED));
+        deadEvents.set(outboxEventRepository.countByStatus(OutboxEventStatus.DEAD));
     }
 
     private void registerGauge(MeterRegistry meterRegistry, String status, AtomicLong value) {

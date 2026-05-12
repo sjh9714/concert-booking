@@ -94,11 +94,15 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     published_at    TIMESTAMP,
+    next_attempt_at TIMESTAMP,
+    dead_at         TIMESTAMP,
     last_error      TEXT
 );
 
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(120);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'USER';
+ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMP;
+ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS dead_at TIMESTAMP;
 
 -- 인덱스
 CREATE INDEX IF NOT EXISTS idx_seats_schedule_status ON seats(schedule_id, status);
@@ -116,5 +120,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_payments_reservation
     ON payments(reservation_id);
 CREATE INDEX IF NOT EXISTS idx_outbox_events_publishable
     ON outbox_events(status, locked_at, created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_publishable_retry
+    ON outbox_events(status, next_attempt_at, locked_at, created_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate
     ON outbox_events(aggregate_type, aggregate_id);
