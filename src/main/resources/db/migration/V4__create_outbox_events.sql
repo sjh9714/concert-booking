@@ -11,5 +11,7 @@ CREATE TABLE outbox_events (
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     published_at    TIMESTAMP,
+    next_attempt_at TIMESTAMP,
+    dead_at         TIMESTAMP,
     last_error      TEXT
 );

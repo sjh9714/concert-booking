@@ -17,5 +17,7 @@ CREATE UNIQUE INDEX uk_payments_reservation
 
 CREATE INDEX idx_outbox_events_publishable
     ON outbox_events(status, locked_at, created_at);
+CREATE INDEX idx_outbox_events_publishable_retry
+    ON outbox_events(status, next_attempt_at, locked_at, created_at);
 CREATE INDEX idx_outbox_events_aggregate
     ON outbox_events(aggregate_type, aggregate_id);
