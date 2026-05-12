@@ -1,6 +1,7 @@
 package com.concert.booking.service.outbox;
 
 import com.concert.booking.domain.OutboxEvent;
+import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.repository.OutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ public class OutboxRelayService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final PlatformTransactionManager transactionManager;
+    private final BookingMetrics bookingMetrics;
 
     @Value("${outbox.relay.batch-size:100}")
     private int defaultBatchSize;
@@ -73,16 +75,19 @@ public class OutboxRelayService {
             return false;
         }
 
+        long startedAt = bookingMetrics.startOutboxPublish();
         try {
             Object payload = deserializePayload(event);
             kafkaTemplate.send(event.getTopic(), String.valueOf(event.getAggregateId()), payload)
                     .get(sendTimeoutSeconds, TimeUnit.SECONDS);
             markPublished(eventId);
+            bookingMetrics.recordOutboxPublished(startedAt);
             log.info("Outbox event published: id={}, eventType={}, topic={}",
                     event.getId(), event.getEventType(), event.getTopic());
             return true;
         } catch (Exception e) {
             markFailed(eventId, rootMessage(e));
+            bookingMetrics.recordOutboxFailed(startedAt);
             log.warn("Outbox event publish failed: id={}, eventType={}, topic={}",
                     event.getId(), event.getEventType(), event.getTopic(), e);
             return false;

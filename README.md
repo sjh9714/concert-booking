@@ -145,6 +145,28 @@ SMOKE=1 STRATEGY=distributed SCENARIO=scenario-f VUS=1 bash k6/run-all.sh
 
 `run-all.sh` 결과는 `k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/`에 저장됩니다.
 
+## Observability
+
+Spring Boot Actuator와 Micrometer를 사용해 로컬 검증용 운영 지표를 노출합니다.
+
+| Endpoint | 접근 정책 |
+| --- | --- |
+| `/actuator/health` | 인증 없이 조회 가능 |
+| `/actuator/info` | 인증 없이 조회 가능 |
+| `/actuator/metrics` | `ROLE_ADMIN` 필요 |
+| `/actuator/prometheus` | `ROLE_ADMIN` 필요 |
+
+대표 metric:
+
+| 영역 | metric |
+| --- | --- |
+| 예매 | `concert.booking.reservation.attempts`, `concert.booking.reservation.success`, `concert.booking.reservation.failures`, `concert.booking.reservation.latency` |
+| 대기열 token | `concert.booking.queue.token.issued`, `concert.booking.queue.token.validation.failures`, `concert.booking.queue.token.inflight.conflicts` |
+| Outbox relay | `concert.booking.outbox.published`, `concert.booking.outbox.failed`, `concert.booking.outbox.publish.latency`, `concert.booking.outbox.events` |
+| Stock reconciliation | `concert.booking.stock.reconciliation.runs`, `concert.booking.stock.reconciliation.mismatches`, `concert.booking.stock.reconciliation.repairs` |
+
+Outbox gauge는 scrape마다 DB를 조회하지 않고, 주기적으로 갱신한 pending/failed count를 노출합니다. 이 섹션은 기본적인 관측 지표를 설명하며, alerting, dashboard, tracing, SLO 운영 체계까지 구현했다는 의미는 아닙니다.
+
 ## API Notes
 
 | Method | Path | 비고 |

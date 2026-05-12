@@ -2,6 +2,7 @@ package com.concert.booking.service.reservation;
 
 import com.concert.booking.common.exception.SeatNotAvailableException;
 import com.concert.booking.dto.reservation.ReservationRequest;
+import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.repository.ConcertScheduleRepository;
 import com.concert.booking.repository.ReservationRepository;
 import com.concert.booking.repository.ReservationSeatRepository;
@@ -21,6 +22,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -70,7 +72,8 @@ class DistributedLockReservationServiceStockFailureTest {
                 transactionTemplate,
                 reservationCancellationService,
                 outboxEventService,
-                redisStockService
+                redisStockService,
+                new BookingMetrics(new SimpleMeterRegistry())
         );
         tokenLease = new QueueTokenGuard.TokenLease("token-key", "inflight-key");
     }

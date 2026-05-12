@@ -1,6 +1,7 @@
 package com.concert.booking.repository;
 
 import com.concert.booking.domain.OutboxEvent;
+import com.concert.booking.domain.OutboxEventStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,6 +10,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
+
+    long countByStatus(OutboxEventStatus status);
 
     @Query(nativeQuery = true, value = """
             SELECT *
