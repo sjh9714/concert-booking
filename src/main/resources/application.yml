@@ -16,7 +16,11 @@ spring:
 
   sql:
     init:
-      mode: always
+      mode: never
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
   data:
     redis:

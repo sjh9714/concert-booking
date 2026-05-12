@@ -27,7 +27,9 @@ dependencies {
     implementation("org.springframework.kafka:spring-kafka")
 
     // Database
+    implementation("org.flywaydb:flyway-core")
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
     // Redis + Redisson
     implementation("org.redisson:redisson-spring-boot-starter:3.40.2")

@@ -22,6 +22,7 @@ flowchart LR
 
 역할을 일부러 나눴습니다. 예매 서비스는 좌석 선점과 상태 전이에 집중하고, Kafka consumer는 취소/만료 이후 좌석 반환을 멱등적으로 처리합니다. Redis stock은 빠른 선검증용이고, 최종 정합성 기준은 DB입니다.
 좌석 조회는 항상 요청 `scheduleId`와 `seatIds`를 함께 조건으로 걸어, 다른 공연 일정의 좌석이 예매에 섞이지 않도록 합니다.
+DB 스키마는 JPA 자동 생성이 아니라 `src/main/resources/db/migration`의 Flyway migration으로 관리합니다.
 
 ## 2. Data Model
 
