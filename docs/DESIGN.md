@@ -186,7 +186,9 @@ sequenceDiagram
     end
 ```
 
-세 예매 전략은 같은 API 계약을 공유합니다. 차이는 좌석과 schedule 재고를 보호하는 방식입니다.
+세 예매 전략은 같은 API 계약을 공유합니다. 공통 생성 흐름은 `ReservationOrchestrator`와
+`ReservationCreationService`가 처리하고, 각 전략 클래스는 좌석과 schedule 재고를 보호하는
+locking/stock 방식만 담당합니다.
 
 ## 6. Lock Strategy Comparison
 
