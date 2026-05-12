@@ -71,7 +71,7 @@ queue enter
 
 ## Evidence
 
-### k6 Measured
+### Measured
 
 | 시나리오 | 조건 | 결과 |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ queue enter
 
 상세 수치와 한계는 [docs/PERF_RESULT.md](docs/PERF_RESULT.md)에 따로 적었습니다. 새로 추가한 D/E/F k6 시나리오는 script만 추가된 상태이며, 정식 부하 결과는 pending입니다.
 
-### Testcontainers Verified
+### Verified
 
 | 검증 항목 | 대표 테스트 |
 | --- | --- |
@@ -98,6 +98,14 @@ queue enter
 | 일반 admin endpoint의 `ROLE_ADMIN` 보호 | `AdminSecurityIntegrationTest` |
 | 분산 락 실패 경로의 stock 복원 | `DistributedLockStockFailureIntegrationTest` |
 | k6 fixture reset endpoint | `LoadTestAdminControllerIntegrationTest` |
+
+### Pending
+
+| 항목 | 현재 상태 |
+| --- | --- |
+| Scenario D Payment Expiration Race | script added, result pending |
+| Scenario E Duplicate Request / Idempotency | script added, result pending |
+| Scenario F Queue Token Abuse | script added, smoke checked, 정식 부하 결과 pending |
 
 ## How to Run
 
