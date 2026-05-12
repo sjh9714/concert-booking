@@ -65,6 +65,7 @@ queue enter
 | DB final consistency | Redis stock은 캐시입니다. 최종 기준은 DB `Seat.status = AVAILABLE` count입니다. |
 | 좌석은 요청 schedule에 속해야 함 | 세 락 전략 모두 schedule-bound seat query를 사용합니다. |
 | `Idempotency-Key` | 사용자 더블클릭, timeout 이후 재요청, 결제 재시도를 DB unique constraint로 막습니다. |
+| Flyway migrations | JPA DDL 자동 생성과 `schema.sql` init 대신 versioned SQL migration으로 스키마를 관리합니다. |
 | Outbox Pattern | DB commit과 Kafka publish 사이의 이벤트 유실 구간을 줄입니다. |
 | DLT + manual replay utility | Consumer 처리 실패를 격리하고, 로컬 검증용 수동 복구 경로를 제공합니다. |
 
