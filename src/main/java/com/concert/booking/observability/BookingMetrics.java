@@ -66,6 +66,11 @@ public class BookingMetrics {
         recordOutboxLatency(startedAt, "failed");
     }
 
+    public void recordOutboxDead(long startedAt) {
+        increment("concert.booking.outbox.dead");
+        recordOutboxLatency(startedAt, "dead");
+    }
+
     public void recordStockReconciliationRun(boolean repair) {
         counter("concert.booking.stock.reconciliation.runs", "repair", String.valueOf(repair)).increment();
     }

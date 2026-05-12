@@ -1,6 +1,7 @@
 package com.concert.booking.service.outbox;
 
 import com.concert.booking.domain.OutboxEvent;
+import com.concert.booking.domain.OutboxEventStatus;
 import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.repository.OutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -40,6 +41,18 @@ public class OutboxRelayService {
     @Value("${outbox.relay.send-timeout-seconds:5}")
     private long sendTimeoutSeconds;
 
+    @Value("${outbox.relay.max-retry-count:5}")
+    private int maxRetryCount;
+
+    @Value("${outbox.relay.initial-backoff-ms:1000}")
+    private long initialBackoffMs;
+
+    @Value("${outbox.relay.backoff-multiplier:2}")
+    private double backoffMultiplier;
+
+    @Value("${outbox.relay.max-backoff-ms:60000}")
+    private long maxBackoffMs;
+
     public int publishPendingBatch() {
         return publishPendingBatch(defaultBatchSize);
     }
@@ -61,7 +74,7 @@ public class OutboxRelayService {
         return inRequiresNew(() -> {
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime staleBefore = now.minus(Duration.ofSeconds(lockStaleSeconds));
-            List<OutboxEvent> events = outboxEventRepository.findPublishableForUpdate(staleBefore, batchSize);
+            List<OutboxEvent> events = outboxEventRepository.findPublishableForUpdate(now, staleBefore, batchSize);
             events.forEach(event -> event.claim(now));
             return events.stream()
                     .map(OutboxEvent::getId)
@@ -71,7 +84,9 @@ public class OutboxRelayService {
 
     private boolean publishClaimedEvent(Long eventId) {
         OutboxEvent event = outboxEventRepository.findById(eventId).orElse(null);
-        if (event == null || event.getStatus().name().equals("PUBLISHED")) {
+        if (event == null
+                || event.getStatus() == OutboxEventStatus.PUBLISHED
+                || event.getStatus() == OutboxEventStatus.DEAD) {
             return false;
         }
 
@@ -86,8 +101,12 @@ public class OutboxRelayService {
                     event.getId(), event.getEventType(), event.getTopic());
             return true;
         } catch (Exception e) {
-            markFailed(eventId, rootMessage(e));
-            bookingMetrics.recordOutboxFailed(startedAt);
+            OutboxEventStatus status = markFailed(eventId, rootMessage(e));
+            if (status == OutboxEventStatus.DEAD) {
+                bookingMetrics.recordOutboxDead(startedAt);
+            } else {
+                bookingMetrics.recordOutboxFailed(startedAt);
+            }
             log.warn("Outbox event publish failed: id={}, eventType={}, topic={}",
                     event.getId(), event.getEventType(), event.getTopic(), e);
             return false;
@@ -107,13 +126,32 @@ public class OutboxRelayService {
         });
     }
 
-    private void markFailed(Long eventId, String errorMessage) {
-        inRequiresNew(() -> {
+    private OutboxEventStatus markFailed(Long eventId, String errorMessage) {
+        return inRequiresNew(() -> {
             OutboxEvent event = outboxEventRepository.findById(eventId)
                     .orElseThrow(() -> new IllegalStateException("Outbox event not found: " + eventId));
-            event.markFailed(errorMessage, LocalDateTime.now());
-            return null;
+            LocalDateTime now = LocalDateTime.now();
+            int nextRetryCount = event.getRetryCount() + 1;
+            LocalDateTime nextAttemptAt = now.plus(Duration.ofMillis(backoffMillis(nextRetryCount)));
+            event.markFailed(errorMessage, now, nextAttemptAt, effectiveMaxRetryCount());
+            return event.getStatus();
         });
+    }
+
+    private int effectiveMaxRetryCount() {
+        return Math.max(1, maxRetryCount);
+    }
+
+    private long backoffMillis(int retryCountAfterFailure) {
+        long initial = Math.max(0, initialBackoffMs);
+        long max = Math.max(initial, maxBackoffMs);
+        double multiplier = Math.max(1.0, backoffMultiplier);
+        double factor = Math.pow(multiplier, Math.max(0, retryCountAfterFailure - 1));
+        double delay = initial * factor;
+        if (delay >= max) {
+            return max;
+        }
+        return Math.max(0, (long) delay);
     }
 
     private <T> T inRequiresNew(java.util.function.Supplier<T> supplier) {

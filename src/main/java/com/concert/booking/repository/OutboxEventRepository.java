@@ -16,12 +16,19 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
     @Query(nativeQuery = true, value = """
             SELECT *
             FROM outbox_events
-            WHERE status IN ('PENDING', 'FAILED')
+            WHERE (
+                    status = 'PENDING'
+                    OR (
+                        status = 'FAILED'
+                        AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+                    )
+                  )
               AND (locked_at IS NULL OR locked_at < :staleBefore)
             ORDER BY created_at ASC
             LIMIT :limit
             FOR UPDATE SKIP LOCKED
             """)
-    List<OutboxEvent> findPublishableForUpdate(@Param("staleBefore") LocalDateTime staleBefore,
+    List<OutboxEvent> findPublishableForUpdate(@Param("now") LocalDateTime now,
+                                               @Param("staleBefore") LocalDateTime staleBefore,
                                                @Param("limit") int limit);
 }

@@ -61,6 +61,7 @@ class BookingMetricsTest {
         bookingMetrics.recordQueueTokenValidationFailure();
         bookingMetrics.recordQueueTokenInFlightConflict();
         bookingMetrics.recordOutboxPublished(startedAt);
+        bookingMetrics.recordOutboxDead(startedAt);
         bookingMetrics.recordStockReconciliationRun(true);
         bookingMetrics.recordStockReconciliationMismatch();
         bookingMetrics.recordStockReconciliationRepair();
@@ -69,6 +70,7 @@ class BookingMetricsTest {
         assertThat(counter("concert.booking.queue.token.validation.failures")).isEqualTo(1.0);
         assertThat(counter("concert.booking.queue.token.inflight.conflicts")).isEqualTo(1.0);
         assertThat(counter("concert.booking.outbox.published")).isEqualTo(1.0);
+        assertThat(counter("concert.booking.outbox.dead")).isEqualTo(1.0);
         assertThat(counter("concert.booking.stock.reconciliation.runs", "repair", "true")).isEqualTo(1.0);
         assertThat(counter("concert.booking.stock.reconciliation.mismatches")).isEqualTo(1.0);
         assertThat(counter("concert.booking.stock.reconciliation.repairs")).isEqualTo(1.0);
