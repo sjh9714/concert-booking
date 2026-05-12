@@ -43,6 +43,8 @@ jobs:
               list(Path("src").rglob("*.java"))
               + list(Path("k6").rglob("*.js"))
               + list(Path("k6").rglob("*.sh"))
+              + list(Path(".github").rglob("*.yml"))
+              + list(Path(".github").rglob("*.yaml"))
               + [Path("README.md"), Path("docs/DESIGN.md"), Path("docs/PERF_RESULT.md")]
           )
 
