@@ -8,6 +8,7 @@ import com.concert.booking.dto.concert.SeatResponse;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.repository.*;
 import com.concert.booking.service.outbox.OutboxEventService;
 import com.concert.booking.service.queue.QueueTokenGuard;
@@ -40,6 +41,7 @@ public class OptimisticLockReservationService implements ReservationService {
     private final TransactionTemplate transactionTemplate;
     private final ReservationCancellationService reservationCancellationService;
     private final OutboxEventService outboxEventService;
+    private final BookingMetrics bookingMetrics;
 
     @Override
     @Retryable(
@@ -48,6 +50,10 @@ public class OptimisticLockReservationService implements ReservationService {
             backoff = @Backoff(delay = 50, multiplier = 2)
     )
     public ReservationResponse reserve(Long userId, ReservationRequest request, String idempotencyKey) {
+        return bookingMetrics.recordReservation(() -> reserveInternal(userId, request, idempotencyKey));
+    }
+
+    private ReservationResponse reserveInternal(Long userId, ReservationRequest request, String idempotencyKey) {
         ReservationIdempotencyService.ReservationClaim claim =
                 reservationIdempotencyService.claimOrReplay(userId, request.scheduleId(), idempotencyKey, request.seatIds());
         if (claim.replay()) {
