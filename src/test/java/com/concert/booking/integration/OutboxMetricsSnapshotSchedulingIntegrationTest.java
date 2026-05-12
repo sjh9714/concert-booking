@@ -59,7 +59,7 @@ class OutboxMetricsSnapshotSchedulingIntegrationTest {
                         {"reservationId":2,"userId":1,"scheduleId":1,"totalAmount":1000,"confirmedAt":"2026-05-12T12:00:00"}
                         """
         );
-        failed.markFailed("kafka down", LocalDateTime.now());
+        failed.markFailed("kafka down", LocalDateTime.now(), LocalDateTime.now().plusSeconds(1), 5);
         outboxEventRepository.save(failed);
 
         Awaitility.await()

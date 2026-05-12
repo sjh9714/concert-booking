@@ -22,16 +22,19 @@ class OutboxMetricsSnapshotTest {
 
         when(repository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(3L);
         when(repository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(2L);
+        when(repository.countByStatus(OutboxEventStatus.DEAD)).thenReturn(1L);
 
         snapshot.refresh();
 
         verify(repository).countByStatus(OutboxEventStatus.PENDING);
         verify(repository).countByStatus(OutboxEventStatus.FAILED);
+        verify(repository).countByStatus(OutboxEventStatus.DEAD);
 
         clearInvocations(repository);
 
         assertThat(gauge(meterRegistry, "pending")).isEqualTo(3.0);
         assertThat(gauge(meterRegistry, "failed")).isEqualTo(2.0);
+        assertThat(gauge(meterRegistry, "dead")).isEqualTo(1.0);
         verifyNoInteractions(repository);
     }
 
