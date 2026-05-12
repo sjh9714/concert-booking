@@ -4,6 +4,7 @@ import com.concert.booking.common.exception.QueueNotReadyException;
 import com.concert.booking.common.util.RedisKeyUtil;
 import com.concert.booking.dto.queue.QueuePositionResponse;
 import com.concert.booking.dto.queue.QueueTokenResponse;
+import com.concert.booking.observability.BookingMetrics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class QueueService {
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final BookingMetrics bookingMetrics;
 
     private static final int ENTRY_THRESHOLD = 100; // 100등 이내 입장 가능
     private static final int TOKEN_TTL_SECONDS = 300; // 5분
@@ -62,6 +64,7 @@ public class QueueService {
 
         // 대기열에서 제거
         removeFromQueue(userId, scheduleId);
+        bookingMetrics.recordQueueTokenIssued();
 
         return new QueueTokenResponse(token, scheduleId);
     }
@@ -70,7 +73,11 @@ public class QueueService {
     public boolean validateToken(Long userId, Long scheduleId, String token) {
         String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
         String storedToken = redisTemplate.opsForValue().get(tokenKey);
-        return token != null && token.equals(storedToken);
+        boolean valid = token != null && token.equals(storedToken);
+        if (!valid) {
+            bookingMetrics.recordQueueTokenValidationFailure();
+        }
+        return valid;
     }
 
     // 토큰 소비: DEL (예매 성공 시 1회 사용)

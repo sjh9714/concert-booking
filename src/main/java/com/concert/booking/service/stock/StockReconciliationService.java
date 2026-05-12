@@ -2,6 +2,7 @@ package com.concert.booking.service.stock;
 
 import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.SeatStatus;
+import com.concert.booking.observability.BookingMetrics;
 import com.concert.booking.repository.ConcertScheduleRepository;
 import com.concert.booking.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +23,12 @@ public class StockReconciliationService {
     private final ConcertScheduleRepository concertScheduleRepository;
     private final SeatRepository seatRepository;
     private final RedisStockService redisStockService;
+    private final BookingMetrics bookingMetrics;
 
     @Transactional
     public ReconciliationResult reconcile(Long scheduleId, boolean repair) {
+        bookingMetrics.recordStockReconciliationRun(repair);
+
         ConcertSchedule schedule = concertScheduleRepository.findByIdForUpdate(scheduleId)
                 .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
 
@@ -34,9 +38,13 @@ public class StockReconciliationService {
         Integer redisStock = redisStockService.readRedisStock(scheduleId);
 
         List<String> mismatches = mismatches(schedule, availableCount, redisStock);
+        if (!mismatches.isEmpty()) {
+            bookingMetrics.recordStockReconciliationMismatch();
+        }
         if (repair && !mismatches.isEmpty()) {
             schedule.syncAvailableSeats(availableCount);
             redisStockService.initialize(scheduleId, true);
+            bookingMetrics.recordStockReconciliationRepair();
             return new ReconciliationResult(
                     scheduleId,
                     availableCount,
