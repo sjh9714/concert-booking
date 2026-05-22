@@ -7,6 +7,8 @@ plugins {
 group = "com.concert"
 version = "0.0.1-SNAPSHOT"
 
+extra["testcontainers.version"] = "1.21.4"
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)

@@ -19,6 +19,11 @@ Thumbs.db
 
 # Test
 /test-results/
+__pycache__/
+*.pyc
 
 # k6 results
 k6/results/
+
+# Local monitoring evidence helper
+monitoring/.generated/
