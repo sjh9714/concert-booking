@@ -1,0 +1,48 @@
+{
+  "title": "Concert Booking Local Verification",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Reservation attempts / success / failures",
+      "targets": [
+        { "expr": "rate(concert_booking_reservation_attempts_total[1m])" },
+        { "expr": "rate(concert_booking_reservation_success_total[1m])" },
+        { "expr": "rate(concert_booking_reservation_failures_total[1m])" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Reservation max latency",
+      "targets": [
+        { "expr": "concert_booking_reservation_latency_seconds_max" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Outbox pending / failed / dead",
+      "targets": [
+        { "expr": "concert_booking_outbox_events{status=\"pending\"}" },
+        { "expr": "concert_booking_outbox_events{status=\"failed\"}" },
+        { "expr": "concert_booking_outbox_events{status=\"dead\"}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Stock reconciliation mismatches / repairs",
+      "targets": [
+        { "expr": "increase(concert_booking_stock_reconciliation_mismatches_total[5m])" },
+        { "expr": "increase(concert_booking_stock_reconciliation_repairs_total[5m])" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue token validation failures",
+      "targets": [
+        { "expr": "increase(concert_booking_queue_token_validation_failures_total[5m])" }
+      ]
+    }
+  ]
+}

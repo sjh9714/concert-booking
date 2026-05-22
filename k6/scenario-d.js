@@ -20,7 +20,8 @@ import {
 
 const paymentSuccess = new Counter('payment_success');
 const expireSuccess = new Counter('expire_success');
-const invalidStateCount = new Counter('invalid_state_count');
+const expectedRaceLoser = new Counter('expected_race_loser');
+const unexpectedRaceResponse = new Counter('unexpected_race_response');
 
 const RACE_VUS = parseInt(__ENV.VUS || '20');
 const RACE_PAIRS = Math.min(parseInt(__ENV.RACE_PAIRS || `${Math.floor(RACE_VUS / 2)}`), 50);
@@ -34,6 +35,10 @@ export const options = {
             iterations: 1,
             maxDuration: '90s',
         },
+    },
+    thresholds: {
+        expected_race_loser: ['count>0'],
+        unexpected_race_response: ['count==0'],
     },
 };
 
@@ -71,15 +76,19 @@ export default function (data) {
         const res = pay(target.user.token, target.reservationId, `race-payment-${target.reservationId}`);
         if (res.status === 201) {
             paymentSuccess.add(1);
+        } else if (isExpectedPaymentLoser(res)) {
+            expectedRaceLoser.add(1);
         } else {
-            invalidStateCount.add(1);
+            unexpectedRaceResponse.add(1);
         }
     } else {
         const res = expireReservation(target.reservationId);
-        if (res.status === 200 && JSON.parse(res.body).expired === true) {
+        if (res.status === 200 && parseBody(res).expired === true) {
             expireSuccess.add(1);
+        } else if (isExpectedExpireLoser(res)) {
+            expectedRaceLoser.add(1);
         } else {
-            invalidStateCount.add(1);
+            unexpectedRaceResponse.add(1);
         }
     }
 }
@@ -91,4 +100,22 @@ export function teardown() {
     console.log(`- payments: ${finalSummary.paymentCount}`);
     console.log(`- duplicate payments: ${finalSummary.duplicatePaymentCount}`);
     console.log(`- Redis stock: ${finalSummary.redisStock}`);
+}
+
+function isExpectedPaymentLoser(res) {
+    const body = parseBody(res);
+    return res.status === 400 && body.code === 'INVALID_RESERVATION_STATE';
+}
+
+function isExpectedExpireLoser(res) {
+    const body = parseBody(res);
+    return res.status === 200 && body.expired === false && body.status === 'CONFIRMED';
+}
+
+function parseBody(res) {
+    try {
+        return JSON.parse(res.body);
+    } catch (e) {
+        return {};
+    }
 }
