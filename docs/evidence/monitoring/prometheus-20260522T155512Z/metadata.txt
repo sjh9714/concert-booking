@@ -1,0 +1,6 @@
+Concert Booking local Prometheus evidence capture
+Captured at: 20260522T155512Z
+PROMETHEUS_URL=http://localhost:9090
+
+This capture is local monitoring evidence only. It is not a production
+alerting, dashboard operation, tracing, or SLO claim.

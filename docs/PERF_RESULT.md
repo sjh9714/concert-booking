@@ -42,25 +42,24 @@ reset이 맞추는 값:
 | reservations/payments/idempotency/reservation_seats | 대상 schedule 기준 삭제 |
 | queue/token/inflight/seat hold key | 대상 schedule 기준 삭제 |
 
-주의: 아래 A/B/C 측정값은 기존 로컬 실행 결과입니다. 6차 수정으로 k6 fixture reset과 D/E/F script를 추가했지만, D/E/F 정식 부하 수치는 아직 측정하지 않았습니다.
+주의: 아래 A/B/C 측정값은 기존 로컬 실행 결과입니다. D/E/F는 refined smoke, 단일 targeted run, 세 전략 x 3회 formal local repeat로 branch/threshold를 확인했습니다. 단, D/E/F 결과는 운영 성능, SLO, capacity claim으로 사용하지 않습니다.
 
 ## 3. Scenario Status
 
-| 라벨 | 의미 |
-| --- | --- |
-| Measured | k6로 수치를 측정했고 아래 표에 기록 |
-| Verified | Testcontainers 통합 테스트로 정책을 검증 |
-| Designed | 코드 경로와 script는 있으나 k6 수치 표는 없음 |
-| Pending | script만 추가했고 정식 수치 측정 전 |
+| 라벨 | 표시명 | 의미 |
+| --- | --- | --- |
+| measured | 측정 완료 | k6로 수치를 측정했고 아래 표에 기록 |
+| verified | 시나리오 검증 | Testcontainers 통합 테스트 또는 제한된 k6 targeted run으로 정책/분기/threshold를 검증 |
+| pending | 추가 측정 예정 | formal benchmark나 정식 수치 표로 승격 전 |
 
 | 시나리오 | 파일 | 목적 | 상태 |
 | --- | --- | --- | --- |
-| A Hot Seat Contention | `k6/scenario-a.js` | 동일 좌석 100명 동시 예매 | Measured |
-| B Distributed Reservation | `k6/scenario-b.js` | 50명이 서로 다른 좌석 예매 | Measured |
-| C Mixed Load | `k6/scenario-c.js` | 70% 조회 + 30% 예매 | Measured |
-| D Payment Expiration Race | `k6/scenario-d.js` | 결제와 만료 race | Pending |
-| E Duplicate Request / Idempotency | `k6/scenario-e.js` | 같은 idempotency key 재요청 | Pending |
-| F Queue Token Abuse | `k6/scenario-f.js` | token 없음/타 사용자/만료 token 차단 | Pending |
+| A 동일 좌석 경합 | `k6/scenario-a.js` | 동일 좌석 100명 동시 예매 | 측정 완료 |
+| B 분산 좌석 예약 | `k6/scenario-b.js` | 50명이 서로 다른 좌석 예매 | 측정 완료 |
+| C 혼합 부하 테스트 | `k6/scenario-c.js` | 70% 조회 + 30% 예매 | 측정 완료 |
+| D Payment Expiration Race | `k6/scenario-d.js` | 결제와 만료 race | 시나리오 검증 |
+| E Duplicate Request / Idempotency | `k6/scenario-e.js` | 같은 idempotency key 재요청과 다른 좌석 conflict | 시나리오 검증 |
+| F Queue Token Abuse | `k6/scenario-f.js` | token 없음/타 사용자/타 schedule/만료 token 차단 | 시나리오 검증 |
 
 ## 4. Measured Results
 
@@ -113,15 +112,133 @@ reset이 맞추는 값:
 
 해석: 쓰기 성공은 좌석 수만큼 50건입니다. 쓰기 실패는 이미 선점되었거나 예매된 좌석을 다시 시도한 요청입니다.
 
-## 5. Pending k6 Results
+## 5. Scenario D/E/F Formal / Targeted k6 Results
 
 | 시나리오 | 현재 상태 | 수치를 쓰지 않는 이유 |
 | --- | --- | --- |
-| D Payment Expiration Race | script added, result pending | 정식 k6 실행 전 |
-| E Duplicate Request / Idempotency | script added, result pending | 정식 k6 실행 전 |
-| F Queue Token Abuse | script added, smoke checked | smoke는 문법/기본 흐름 확인용이라 부하 수치로 쓰지 않음 |
+| D Payment Expiration Race | 세 전략 x 3회 formal local repeat checked | race branch/threshold 검증이며 운영 latency/throughput claim으로 사용하지 않음 |
+| E Duplicate Request / Idempotency | 세 전략 x 3회 formal local repeat checked | idempotency replay/conflict 검증이며 throughput claim으로 사용하지 않음 |
+| F Queue Token Abuse | 세 전략 x 3회 formal local repeat checked | 우회 차단 threshold 검증이며 latency/throughput claim으로 사용하지 않음 |
 
-Scenario F는 `SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-f VUS=1 RUNS=1 USER_COUNT=4 bash k6/run-all.sh`로 한 번 실행해 `unauthorized_success_count == 0` threshold를 확인했습니다. 이 값은 정식 부하 결과로 사용하지 않습니다.
+Scenario D/E/F formal local repeat는 2026-05-22에 아래 조건으로 실행했습니다.
+
+```bash
+RESULTS_ROOT="$PWD/k6/results/20260522-205723-formal-d-e-f" \
+STRATEGIES_OVERRIDE="pessimistic optimistic distributed" \
+SCENARIOS_OVERRIDE="scenario-d scenario-e scenario-f" \
+RUNS=3 \
+SCHEDULE_ID=1 \
+OTHER_SCHEDULE_ID=2 \
+bash k6/run-all.sh
+```
+
+| 시나리오 | 범위 | checks | 핵심 해석 |
+| --- | --- | ---: | --- |
+| D Payment Expiration Race | 3 strategies x 3 runs | 216/216 passed | 모든 run에서 `expected_race_loser: 10`, `unexpected_race_response: 0`, `duplicatePaymentCount: 0` |
+| E Duplicate Request / Idempotency | 3 strategies x 3 runs | 234/234 passed | 모든 run에서 replay branch 20/20, conflict branch 1, `request_fail: 0`, duplicate row 0 |
+| F Queue Token Abuse | 3 strategies x 3 runs | 144/144 passed | 모든 run에서 `unauthorized_success_count: 0`, `unauthorized_reject_count: 4`, `unexpected_reject_status_count: 0` |
+
+요약 증거는 [docs/evidence/SCENARIO_D_E_F_FORMAL_2026-05-22.md](evidence/SCENARIO_D_E_F_FORMAL_2026-05-22.md)에
+분리했습니다. raw `k6/results/...` 디렉터리는 generated artifact이므로 git에는 포함하지 않습니다.
+
+Scenario D/E/F targeted local run은 2026-05-22에 아래 조건으로 실행했습니다.
+
+```bash
+RESULTS_ROOT="$PWD/k6/results/20260522-173952-targeted-d-e-f" \
+STRATEGIES_OVERRIDE="pessimistic" \
+SCENARIOS_OVERRIDE="scenario-d scenario-e scenario-f" \
+RUNS=1 \
+SCHEDULE_ID=1 \
+OTHER_SCHEDULE_ID=2 \
+bash k6/run-all.sh
+```
+
+| 시나리오 | checks | 핵심 counter | final domain summary |
+| --- | --- | --- | --- |
+| D Payment Expiration Race | 24/24 passed | `expected_race_loser: 10`, `unexpected_race_response: 0`, `payment_success: 1`, `expire_success: 9` | `confirmedReservationCount: 1`, `expiredReservationCount: 9`, `paymentCount: 1`, `duplicatePaymentCount: 0` |
+| E Duplicate Request / Idempotency | 26/26 passed | `duplicate_reservation_response: 20`, `duplicate_payment_response: 20`, `idempotency_conflict_count: 1`, `request_fail: 0` | `reservationCount: 1`, `paymentCount: 1`, `duplicateSeatReservationCount: 0`, `duplicatePaymentCount: 0` |
+| F Queue Token Abuse | 16/16 passed | `unauthorized_success_count: 0`, `unauthorized_reject_count: 4`, `unexpected_reject_status_count: 0`, `normal_success_count: 1` | `reservationCount: 1`, `paymentCount: 0` |
+
+이 targeted run은 `run-all.sh`의 `STRATEGIES_OVERRIDE` / `SCENARIOS_OVERRIDE`로 실행한 단일 local run입니다.
+k6 D는 race branch/threshold와 aggregate final summary 근거입니다. 같은 reservation이 confirmed와
+expired를 동시에 갖지 않는 per-reservation 상태 전이 불변식은 `ReservationStateTransitionRaceIntegrationTest`의
+검증 범위로 분리합니다. Scenario E는 same-key replay 응답과 최종 중복 row 부재를 확인하지만, 모든 replay
+응답 body가 byte-identical하다는 claim은 하지 않습니다.
+요약 증거는 [docs/evidence/SCENARIO_D_E_F_TARGETED_2026-05-22.md](evidence/SCENARIO_D_E_F_TARGETED_2026-05-22.md)에
+분리했습니다. raw `k6/results/...` 디렉터리는 generated artifact이므로 git에는 포함하지 않습니다.
+
+Scenario D refined smoke는 2026-05-22에 아래 조건으로 실행했습니다.
+
+```bash
+RESULTS_ROOT="$PWD/k6/results/20260522-153959-scenario-d-refined-threshold-smoke" \
+SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-d VUS=20 RUNS=1 USER_COUNT=20 SCHEDULE_ID=1 bash k6/run-all.sh
+```
+
+| 항목 | 결과 |
+| --- | --- |
+| checks | 24/24 passed |
+| expected race loser | 10 |
+| unexpected race response | 0 |
+| payment success count | 0 |
+| expiration success count | 10 |
+| duplicate payment suspect | 0 |
+| final confirmed reservations | 0 |
+| final expired reservations | 10 |
+
+이 smoke는 결제/만료 race path가 실행되는지와 예상 가능한 race-loser 응답이 예상 밖 응답과 분리되는지
+확인한 기록입니다. `unexpected_race_response == 0` threshold를 통과했지만, 작은 local smoke이므로
+throughput, latency, error-rate claim이나 정식 부하 결과로 사용하지 않습니다. 요약 증거는
+[docs/evidence/SCENARIO_D_SMOKE_2026-05-22.md](evidence/SCENARIO_D_SMOKE_2026-05-22.md)에 분리했습니다.
+
+Scenario F smoke는 2026-05-22에 아래 조건으로 확인했습니다.
+
+```bash
+SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-f VUS=5 RUNS=1 USER_COUNT=4 SCHEDULE_ID=1 OTHER_SCHEDULE_ID=2 bash k6/run-all.sh
+```
+
+| 항목 | 결과 |
+| --- | --- |
+| missing token | rejected |
+| other user token | rejected |
+| other schedule token | rejected |
+| expired token | rejected |
+| unauthorized success count | 0 |
+| unauthorized reject count | 4 |
+| unexpected reject status count | 0 |
+| normal success count | 1 |
+| checks | 16/16 passed |
+
+이 smoke는 각 abuse branch가 최소 한 번씩 실행되는지와 `unauthorized_success_count == 0`,
+`unexpected_reject_status_count == 0` threshold를 확인한 결과입니다. 기존 VUS=1 smoke나 이 작은
+smoke를 정식 부하 결과로 사용하지 않습니다.
+요약 증거는 [docs/evidence/SCENARIO_F_SMOKE_2026-05-22.md](evidence/SCENARIO_F_SMOKE_2026-05-22.md)에
+분리했습니다.
+
+Scenario E smoke는 2026-05-22에 아래 조건으로 확인했습니다.
+
+```bash
+SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-e VUS=5 RUNS=1 USER_COUNT=4 SCHEDULE_ID=1 bash k6/run-all.sh
+```
+
+| 항목 | 결과 |
+| --- | --- |
+| same-key successful reservation responses | 5 |
+| same-key successful payment responses | 5 |
+| same-key different-seat conflict count | 1 |
+| request fail count | 0 |
+| duplicate seat reservation suspect | 0 |
+| duplicate payment suspect | 0 |
+| checks | 11/11 passed |
+
+`same-key successful ... responses`는 최초 생성/결제 응답과 같은 key replay 응답을 합친 branch count입니다.
+중복 row가 없다는 결론은 final domain summary의 `reservationCount: 1`, `paymentCount: 1`,
+`duplicateSeatReservationCount: 0`, `duplicatePaymentCount: 0`을 함께 확인해 해석합니다.
+이 k6 evidence는 byte-identical 응답 body를 주장하지 않고, duplicate-row prevention을 지지하는 근거로만
+사용합니다.
+
+이 smoke는 idempotency replay와 같은 key로 다른 좌석을 요청하는 conflict branch가 최소 한 번 실행되는지 확인한
+결과입니다. 작은 local smoke이므로 throughput, latency, error-rate claim으로 사용하지 않습니다. 요약 증거는
+[docs/evidence/SCENARIO_E_SMOKE_2026-05-22.md](evidence/SCENARIO_E_SMOKE_2026-05-22.md)에 분리했습니다.
 
 ## 6. Verified By Integration Tests
 
@@ -152,7 +269,7 @@ retry 횟수를 크게 늘리면 성공률은 올라갈 수 있습니다. 대신
 
 Redis 분산 락 전략은 DB transaction 전에 Redis stock을 먼저 감소시킵니다. 좌석이 이미 소진된 요청은 DB connection을 잡지 않고 실패합니다. Mixed Load처럼 소진 이후에도 쓰기 요청이 계속 들어오는 시나리오에서는 이 차이가 쓰기 p95에 반영됩니다.
 
-단, Redis stock은 최종 진실이 아닙니다. 장애나 중복 이벤트 이후 Redis stock, `ConcertSchedule.availableSeats`, 실제 `Seat.status`가 어긋날 수 있으므로 manual reconciliation utility를 둡니다.
+단, Redis stock은 최종 기준 데이터가 아닙니다. 장애나 중복 이벤트 이후 Redis stock, `ConcertSchedule.availableSeats`, 실제 `Seat.status`가 어긋날 수 있으므로 manual reconciliation utility를 둡니다.
 
 ### 전략별 해석
 
@@ -197,4 +314,4 @@ k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
 - HikariCP와 Tomcat thread pool은 기본 설정입니다.
 - PostgreSQL, Redis, Kafka, 애플리케이션이 같은 머신에서 실행되었습니다.
 - 결제는 mock payment 즉시 성공 구조입니다. 외부 PG latency, 승인 실패, webhook 흐름은 포함하지 않습니다.
-- D/E/F의 정식 부하 결과는 pending입니다.
+- D/E/F는 refined smoke, pessimistic 단일 targeted run, 세 전략 x 3회 formal local repeat로 branch/threshold를 확인했습니다. 운영 성능 claim과 장기 반복 신뢰구간은 추가 측정 예정입니다.

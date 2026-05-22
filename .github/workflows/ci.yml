@@ -32,7 +32,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Check whitespace
-        run: git diff --check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            git diff --check "origin/${{ github.base_ref }}...HEAD"
+          else
+            git diff-tree --check --no-commit-id --root -r HEAD
+          fi
 
       - name: Check collapsed files
         run: |
@@ -43,9 +50,13 @@ jobs:
               list(Path("src").rglob("*.java"))
               + list(Path("k6").rglob("*.js"))
               + list(Path("k6").rglob("*.sh"))
+              + list(Path("docs").rglob("*.md"))
+              + list(Path("monitoring").rglob("*.yml"))
+              + list(Path("monitoring").rglob("*.yaml"))
+              + list(Path("monitoring").rglob("*.json"))
               + list(Path(".github").rglob("*.yml"))
               + list(Path(".github").rglob("*.yaml"))
-              + [Path("README.md"), Path("docs/DESIGN.md"), Path("docs/PERF_RESULT.md")]
+              + [Path("README.md")]
           )
 
           bad = []
@@ -75,6 +86,53 @@ jobs:
           node --check k6/scenario-d.js
           node --check k6/scenario-e.js
           node --check k6/scenario-f.js
+
+      - name: Check monitoring template syntax
+        run: |
+          python3 -m json.tool monitoring/grafana/dashboards/concert-booking-dashboard.json >/dev/null
+          bash -n scripts/capture-monitoring-evidence.sh
+          bash -n scripts/monitoring-local-verify.sh
+          python3 -m py_compile scripts/validate-monitoring-evidence.py scripts/test-monitoring-evidence-validator.py
+          python3 scripts/test-monitoring-evidence-validator.py
+          mkdir -p monitoring/.generated
+          printf 'dummy-token' > monitoring/.generated/concert-booking.token
+          docker compose -f docker-compose.yml -f docker-compose.monitoring.yml config >/dev/null
+          docker run --rm \
+            --entrypoint promtool \
+            -v "$PWD/monitoring:/etc/prometheus" \
+            prom/prometheus:v2.55.1 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm \
+            --entrypoint promtool \
+            -v "$PWD/monitoring:/etc/prometheus" \
+            prom/prometheus:v2.55.1 \
+            check config /etc/prometheus/prometheus.local.yml
+          docker run --rm \
+            --entrypoint promtool \
+            -v "$PWD/monitoring:/etc/prometheus" \
+            prom/prometheus:v2.55.1 \
+            test rules /etc/prometheus/alert-rules.test.yml
+
+      - name: Check docs evidence policy
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          sources = [Path("README.md")] + list(Path("docs").rglob("*.md"))
+          text = "\n".join(path.read_text(encoding="utf-8", errors="ignore") for path in sources)
+
+          disallowed = ["스모크 확인", "시나리오 추가"]
+          for phrase in disallowed:
+              if phrase in text:
+                  raise SystemExit(f"Use the portfolio evidence taxonomy instead of '{phrase}'")
+
+          for scenario in ("D Payment Expiration Race", "E Duplicate Request / Idempotency", "F Queue Token Abuse"):
+              if re.search(rf"{re.escape(scenario)}[^\n|]*\|[^\n]*측정 완료", text):
+                  raise SystemExit(f"{scenario} must not be promoted to 측정 완료 without repeated benchmark evidence")
+
+          print("OK")
+          PY
 
       - name: Inspect k6 scenarios
         run: |

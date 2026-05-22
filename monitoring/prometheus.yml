@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - alert-rules.yml
+
+scrape_configs:
+  - job_name: concert-booking-local
+    metrics_path: /actuator/prometheus
+    # /actuator/prometheus is ROLE_ADMIN-protected by the app security policy.
+    # Configure bearer_token_file, basic_auth, or an internal/local-only scrape policy
+    # before using this template against a running app.
+    # bearer_token_file: /etc/prometheus/concert-booking.token
+    static_configs:
+      - targets:
+          - host.docker.internal:8080

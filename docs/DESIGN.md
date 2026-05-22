@@ -298,6 +298,18 @@ Relay는 `PENDING` 이벤트와 `nextAttemptAt`이 지난 `FAILED` 이벤트만 
 
 Outbox는 exactly-once를 보장하지 않습니다. 목적은 DB commit 이후 publish 실패로 이벤트가 사라지는 구간을 줄이는 것입니다. 중복 발행 가능성은 consumer 멱등성으로 흡수합니다.
 
+### Outbox 상태 전이
+
+| 상태 | 의미 | 전이 조건 | 운영 조치 |
+| --- | --- | --- | --- |
+| `PENDING` | DB transaction 안에 이벤트 발행 의도를 기록했지만 아직 Kafka publish 전입니다. | domain transaction commit | relay scheduler 대상입니다. 같은 aggregate의 최신 도메인 상태를 함께 확인합니다. |
+| `PUBLISHED` | Kafka publish가 성공했습니다. | Kafka send success | consumer 처리 결과와 DLT 여부를 확인합니다. publish 성공이 consumer 성공을 뜻하지는 않습니다. |
+| `FAILED` | Kafka publish가 실패했지만 재시도 여지가 남아 있습니다. | Kafka send failure + retry count remaining | `lastError`, broker 상태, `nextAttemptAt`을 확인하고 자동 재시도를 기다립니다. |
+| `DEAD` | 설정한 재시도 횟수를 초과해 자동 relay 대상에서 제외됐습니다. | max retry exceeded | payload와 consumer idempotency 기준을 확인한 뒤 manual replay 또는 보류를 결정합니다. |
+
+Consumer 실패는 Outbox 상태만으로 판단하지 않습니다. publish 이후 consumer 처리 실패는 Kafka DLT와
+`SeatReleaseConsumer`의 멱등 처리 결과를 함께 봅니다.
+
 ## 10. DLT Replay Flow
 
 ```mermaid
@@ -385,4 +397,5 @@ reset이 맞추는 상태:
 - Kafka replay는 manual utility입니다.
 - Redis 장애 자동 fallback은 구현하지 않았습니다.
 - k6 A/B/C 결과는 로컬 Docker 단일 실행 기준입니다.
-- D/E/F k6 시나리오는 script added, result pending입니다.
+- D/E/F는 refined smoke, pessimistic 단일 targeted run, 세 전략 x 3회 formal local repeat로 branch/threshold를 확인했습니다.
+- D/E/F 운영 성능 claim과 장기 반복 신뢰구간은 추가 측정 예정입니다.

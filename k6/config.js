@@ -1,6 +1,7 @@
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 export const CONCERT_ID = parseInt(__ENV.CONCERT_ID || '1');
 export const SCHEDULE_ID = parseInt(__ENV.SCHEDULE_ID || '1');
+export const OTHER_SCHEDULE_ID = parseInt(__ENV.OTHER_SCHEDULE_ID || `${SCHEDULE_ID + 1}`);
 
 // VU 수 (로컬 환경에 맞게 축소: DESIGN.md의 1,000 → 100)
 export const VUS = parseInt(__ENV.VUS || '100');

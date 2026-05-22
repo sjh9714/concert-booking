@@ -1,0 +1,46 @@
+rule_files:
+  - alert-rules.yml
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'concert_booking_outbox_events{status="dead"}'
+        values: '1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OutboxDeadEventsPresent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              status: dead
+            exp_annotations:
+              summary: Outbox DEAD events are present
+              description: Check docs/RUNBOOK.md before manual replay.
+
+  - interval: 1m
+    input_series:
+      - series: concert_booking_stock_reconciliation_mismatches_total
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: StockMismatchDetected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Redis stock mismatch detected
+              description: DB-based reconciliation을 사용합니다. Redis는 최종 기준 데이터가 아닙니다.
+
+  - interval: 1m
+    input_series:
+      - series: concert_booking_queue_token_validation_failures_total
+        values: '0 2 4 6 8 11 13 15 17 19 21'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: QueueTokenValidationFailuresHigh
+        exp_alerts:
+          - exp_labels:
+              severity: info
+            exp_annotations:
+              summary: Queue token validation failures increased
+              description: Check token abuse patterns and user/schedule binding.
