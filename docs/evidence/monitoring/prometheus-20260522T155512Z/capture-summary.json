@@ -1,0 +1,14 @@
+{
+  "claimStatus": "local-prometheus-scrape-not-production-observability",
+  "targetHealth": "up",
+  "healthyTargetCount": 1,
+  "requiredAlerts": [
+    "OutboxDeadEventsPresent",
+    "QueueTokenValidationFailuresHigh",
+    "StockMismatchDetected"
+  ],
+  "upResultCount": 1,
+  "outboxResultCount": 3,
+  "queueTokenFailureResultCount": 0,
+  "interpretation": "Local Prometheus server scrape evidence. This does not claim production alert firing, Grafana operation, tracing, or SLO readiness."
+}

@@ -49,9 +49,11 @@
 
 ## 1. 프로젝트 한 줄 요약
 
-**"1만 명이 동시에 1,000석을 예매할 때, 데이터 정합성을 어떻게 보장할 것인가?"**
+**"1만 명이 동시에 1,000석을 예매한다면, 데이터 정합성을 어떻게 보장할 것인가?"**
 
 이 프로젝트는 콘서트 좌석 예매 시스템을 만들면서 **동시성 제어**를 깊이 있게 다루는 백엔드 포트폴리오입니다.
+위 문장은 문제를 설명하기 위한 사고 실험이며, 이 프로젝트의 측정 완료 수치는 `docs/PERF_RESULT.md`에
+기록된 로컬 k6 결과로만 제한합니다.
 
 ### 전체 사용자 흐름
 
@@ -931,6 +933,8 @@ multiLock.tryLock(3, 5, TimeUnit.SECONDS);
   → 100명씩 순차 입장 → DB 부하 제어
 ```
 
+위 숫자는 대기열이 필요한 이유를 설명하는 예시입니다. 이 프로젝트의 실제 측정 결과로 사용하지 않습니다.
+
 ### 전체 흐름
 
 ```
@@ -981,7 +985,7 @@ ZADD queue:schedule:1 1707123457.456 "user:7"
 ```java
 @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 public SseEmitter streamPosition(@RequestParam Long scheduleId) {
-    SseEmitter emitter = new SseEmitter(60000L);  // 60초 타임아웃
+    SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);  // 5분 타임아웃
 
     // 1초마다 순위 전송
     scheduler.scheduleAtFixedRate(() -> {
@@ -1044,6 +1048,9 @@ try {
         Consumer 1: 알림 발송 (별도 스레드)
         Consumer 2: 통계 집계 (별도 스레드)
 ```
+
+위 latency 숫자는 동기/비동기 구조 차이를 설명하는 예시입니다. 이 프로젝트에서 측정한 성능 수치가
+아닙니다.
 
 ### 이벤트 토픽 설계
 
@@ -1197,7 +1204,7 @@ Redis VALUE: { lockedAt, lockedBy, lockUntil }
 테스트 실행 시 **실제 Docker 컨테이너**(PostgreSQL, Redis, Kafka)를 자동으로 띄우고, 끝나면 제거합니다.
 
 ```java
-// test/config/TestContainersConfig.java
+// src/test/java/com/concert/booking/config/TestContainersConfig.java
 @TestConfiguration(proxyBeanMethods = false)
 public class TestContainersConfig {
 
@@ -1239,7 +1246,7 @@ public class TestContainersConfig {
 ### 테스트 프로파일
 
 ```yaml
-# test/resources/application-test.yml
+# src/test/resources/application-test.yml
 spring:
   sql:
     init:
@@ -1258,7 +1265,7 @@ spring:
 
 TestContainers가 PostgreSQL, Redis, Kafka를 실제로 구동하므로 auto-config 제외가 불필요합니다.
 
-### 테스트 목록 (총 16개)
+### 대표 테스트 목록
 
 | 테스트 | 파일 | 검증 내용 |
 |--------|------|-----------|
@@ -1275,9 +1282,9 @@ TestContainers가 PostgreSQL, Redis, Kafka를 실제로 구동하므로 auto-con
 
 ## 22. 동시성 테스트 — 왜 1명만 성공하는가
 
-> 파일: `test/integration/ConcurrencyIntegrationTest.java`
-> 파일: `test/integration/OptimisticLockConcurrencyTest.java`
-> 파일: `test/integration/DistributedLockConcurrencyTest.java`
+> 파일: `src/test/java/com/concert/booking/integration/ConcurrencyIntegrationTest.java`
+> 파일: `src/test/java/com/concert/booking/integration/OptimisticLockConcurrencyTest.java`
+> 파일: `src/test/java/com/concert/booking/integration/DistributedLockConcurrencyTest.java`
 
 ### 테스트 구조 (두 테스트 모두 동일 패턴)
 
@@ -1541,4 +1548,4 @@ curl -X POST http://localhost:8080/api/payments \
 ---
 
 > 이 문서에서 다루지 않은 내용:
-> - k6 부하 테스트 + 3가지 락 전략 성능 비교 (PERF_RESULT.md에서 다룰 예정)
+> - k6 부하 테스트와 3가지 락 전략 성능 비교는 `docs/PERF_RESULT.md`와 `docs/LOCK_STRATEGY_GUIDE.md`에서 다룹니다.

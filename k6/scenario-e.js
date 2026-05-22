@@ -20,7 +20,7 @@ import {
 
 const duplicateReservationResponse = new Counter('duplicate_reservation_response');
 const duplicatePaymentResponse = new Counter('duplicate_payment_response');
-const conflictCount = new Counter('conflict_count');
+const idempotencyConflictCount = new Counter('idempotency_conflict_count');
 const requestFail = new Counter('request_fail');
 
 const DUPLICATE_VUS = parseInt(__ENV.VUS || '20');
@@ -34,6 +34,10 @@ export const options = {
             maxDuration: '90s',
         },
     },
+    thresholds: {
+        request_fail: ['count==0'],
+        idempotency_conflict_count: ['count>=1'],
+    },
 };
 
 export function setup() {
@@ -41,16 +45,17 @@ export function setup() {
     const users = setupUsers(1);
     const user = users[0];
     const seatsRes = getSeats(user.token, fixture.concertId, SCHEDULE_ID);
-    const seat = JSON.parse(seatsRes.body).find(s => s.status === 'AVAILABLE');
+    const availableSeats = JSON.parse(seatsRes.body).filter(s => s.status === 'AVAILABLE');
     const queueToken = issueQueueToken(user.token, SCHEDULE_ID);
 
-    if (!queueToken || !seat) {
-        throw new Error('Scenario E setup failed: no queue token or available seat');
+    if (!queueToken || availableSeats.length < 2) {
+        throw new Error('Scenario E setup failed: no queue token or at least two available seats');
     }
 
     return {
         user,
-        seatId: seat.id,
+        seatId: availableSeats[0].id,
+        conflictSeatId: availableSeats[1].id,
         queueToken,
         reservationKey: `duplicate-reservation-${Date.now()}`,
         paymentKey: `duplicate-payment-${Date.now()}`,
@@ -72,15 +77,33 @@ export default function (data) {
         const paymentRes = pay(data.user.token, reservation.id, data.paymentKey);
         if (paymentRes.status === 201) {
             duplicatePaymentResponse.add(1);
-        } else if (paymentRes.status === 409) {
-            conflictCount.add(1);
         } else {
             requestFail.add(1);
         }
     } else if (reservationRes.status === 409) {
-        conflictCount.add(1);
+        idempotencyConflictCount.add(1);
     } else {
         requestFail.add(1);
+    }
+
+    if (__VU === 1) {
+        const conflictRes = directReserve(
+            data.user.token,
+            SCHEDULE_ID,
+            [data.conflictSeatId],
+            data.queueToken,
+            data.reservationKey
+        );
+
+        if (conflictRes.status === 409) {
+            idempotencyConflictCount.add(1);
+        } else {
+            requestFail.add(1);
+        }
+
+        check(conflictRes, {
+            'same idempotency key with different seat returns conflict': (r) => r.status === 409,
+        });
     }
 
     check(reservationRes, {

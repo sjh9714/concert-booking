@@ -1,0 +1,29 @@
+groups:
+  - name: concert-booking-local-verification
+    rules:
+      - alert: OutboxDeadEventsPresent
+        expr: concert_booking_outbox_events{status="dead"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox DEAD events are present
+          description: Check docs/RUNBOOK.md before manual replay.
+
+      - alert: StockMismatchDetected
+        expr: increase(concert_booking_stock_reconciliation_mismatches_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis stock mismatch detected
+          description: DB-based reconciliation을 사용합니다. Redis는 최종 기준 데이터가 아닙니다.
+
+      - alert: QueueTokenValidationFailuresHigh
+        expr: increase(concert_booking_queue_token_validation_failures_total[10m]) > 10
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: Queue token validation failures increased
+          description: Check token abuse patterns and user/schedule binding.
