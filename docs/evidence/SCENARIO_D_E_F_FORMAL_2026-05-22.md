@@ -1,9 +1,10 @@
-# Scenario D/E/F Formal Local Repeat Evidence
+# Concert Scenario Formal Local Repeat Evidence
 
 ## Scope
 
-This document summarizes the local formal repeat run for Scenario D/E/F on
-2026-05-22.
+This document summarizes the local formal repeat run for 결제/만료 race 검증
+(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E), and
+대기열 token abuse 검증(Scenario F) on 2026-05-22.
 
 It is stronger than the earlier smoke and single-strategy targeted records
 because each scenario was executed against all three reservation strategies
@@ -44,11 +45,11 @@ k6/results/20260522-205723-formal-d-e-f/
 
 | Scenario | Scope | Checks |
 | --- | --- | ---: |
-| D Payment Expiration Race | 3 strategies x 3 runs | 216/216 passed |
-| E Duplicate Request / Idempotency | 3 strategies x 3 runs | 234/234 passed |
-| F Queue Token Abuse | 3 strategies x 3 runs | 144/144 passed |
+| 결제/만료 race 검증 (Scenario D) | 3 strategies x 3 runs | 216/216 passed |
+| 중복 요청 idempotency replay/conflict 검증 (Scenario E) | 3 strategies x 3 runs | 234/234 passed |
+| 대기열 token abuse 검증 (Scenario F) | 3 strategies x 3 runs | 144/144 passed |
 
-## Scenario D: Payment Expiration Race
+## 결제/만료 race 검증 (Scenario D)
 
 | Strategy | Run | Checks | Key counters | Final domain summary |
 | --- | ---: | ---: | --- | --- |
@@ -71,7 +72,7 @@ Interpretation:
 - Per-reservation state transition invariants remain covered by
   `ReservationStateTransitionRaceIntegrationTest`.
 
-## Scenario E: Duplicate Request / Idempotency
+## 중복 요청 idempotency replay/conflict 검증 (Scenario E)
 
 | Strategy | Runs | Checks | Key counters | Final domain summary |
 | --- | ---: | ---: | --- | --- |
@@ -86,7 +87,7 @@ Interpretation:
 - Same-key different-seat reservation produced the intended conflict branch.
 - This evidence does not claim byte-identical replay response bodies.
 
-## Scenario F: Queue Token Abuse
+## 대기열 token abuse 검증 (Scenario F)
 
 | Strategy | Runs | Checks | Key counters | Final domain summary |
 | --- | ---: | ---: | --- | --- |
