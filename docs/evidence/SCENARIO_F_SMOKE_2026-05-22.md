@@ -1,7 +1,8 @@
-# Scenario F Queue Token Abuse Smoke Evidence
+# 대기열 token abuse 검증 (Scenario F) Smoke Evidence
 
-이 문서는 `docs/PERF_RESULT.md`의 Scenario F smoke 표를 뒷받침하는 요약 증거입니다. 정식 부하
-테스트 결과가 아니라 queue token abuse 분기가 모두 거부되는지 확인한 작은 local smoke입니다.
+이 문서는 `docs/PERF_RESULT.md`의 대기열 token abuse 검증(Scenario F) smoke 표를 뒷받침하는
+요약 증거입니다. 정식 부하 테스트 결과가 아니라 queue token abuse 분기가 모두 거부되는지 확인한
+작은 local smoke입니다.
 
 ## Command
 

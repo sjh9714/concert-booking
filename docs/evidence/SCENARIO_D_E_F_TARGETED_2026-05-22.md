@@ -1,10 +1,12 @@
-# Scenario D/E/F Targeted Local Run Evidence
+# Concert Scenario Targeted Local Run Evidence
 
 ## Scope
 
-This document summarizes one local targeted run for Scenario D/E/F on the
-`pessimistic` strategy. It is stronger than the earlier branch-covering smoke
-records because D/E/F were run together through `k6/run-all.sh` without
+This document summarizes one local targeted run for 결제/만료 race 검증
+(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E), and
+대기열 token abuse 검증(Scenario F) on the `pessimistic` strategy.
+It is stronger than the earlier branch-covering smoke records because the three
+scenarios were run together through `k6/run-all.sh` without
 `SMOKE=1`, but it is still not a repeated benchmark, all-strategy comparison,
 throughput claim, latency claim, or production performance claim.
 
@@ -49,7 +51,7 @@ k6/results/20260522-173952-targeted-d-e-f/pessimistic/
     └── summary.json
 ```
 
-## Scenario D: Payment Expiration Race
+## 결제/만료 race 검증 (Scenario D)
 
 | Item | Observed |
 | --- | ---: |
@@ -76,7 +78,7 @@ Interpretation:
   branch/threshold evidence.
 - This is branch/threshold evidence only.
 
-## Scenario E: Duplicate Request / Idempotency
+## 중복 요청 idempotency replay/conflict 검증 (Scenario E)
 
 | Item | Observed |
 | --- | ---: |
@@ -100,7 +102,7 @@ Interpretation:
 - This evidence does not claim byte-identical replay response bodies.
 - This is idempotency branch/threshold evidence only.
 
-## Scenario F: Queue Token Abuse
+## 대기열 token abuse 검증 (Scenario F)
 
 | Item | Observed |
 | --- | ---: |
@@ -125,5 +127,5 @@ Interpretation:
 
 - Only the `pessimistic` strategy was executed in this targeted run.
 - This was a single local run, so it does not provide repeated statistics,
-  confidence intervals, or strategy comparison for Scenario D/E/F.
+  confidence intervals, or strategy comparison for the D/E/F scenarios.
 - The result must not be described as production performance evidence.

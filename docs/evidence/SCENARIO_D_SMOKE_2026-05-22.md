@@ -1,4 +1,4 @@
-# Scenario D Payment Expiration Race Smoke Evidence
+# 결제/만료 race 검증 (Scenario D) Smoke Evidence
 
 ## Scope
 
@@ -12,7 +12,7 @@ The latest run uses the refined `k6/scenario-d.js` assertion model:
 - unexpected responses are counted as `unexpected_race_response`
 - `unexpected_race_response == 0` is enforced as a k6 threshold
 
-Formal D/E/F local repeat evidence is now summarized separately in
+Formal three-scenario local repeat evidence is summarized separately in
 `SCENARIO_D_E_F_FORMAL_2026-05-22.md`. This smoke remains a small branch record.
 
 ## Latest Refined Smoke Command

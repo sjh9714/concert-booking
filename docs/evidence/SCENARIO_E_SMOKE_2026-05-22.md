@@ -1,7 +1,8 @@
-# Scenario E Duplicate Request / Idempotency Smoke Evidence
+# 중복 요청 idempotency replay/conflict 검증 (Scenario E) Smoke Evidence
 
-이 문서는 `docs/PERF_RESULT.md`의 Scenario E smoke 표를 뒷받침하는 요약 증거입니다. 정식 부하 테스트
-결과가 아니라 idempotency replay와 conflict branch가 작은 local smoke에서 통과하는지 확인한 기록입니다.
+이 문서는 `docs/PERF_RESULT.md`의 중복 요청 idempotency replay/conflict 검증(Scenario E) smoke 표를
+뒷받침하는 요약 증거입니다. 정식 부하 테스트 결과가 아니라 idempotency replay와 conflict branch가
+작은 local smoke에서 통과하는지 확인한 기록입니다.
 
 ## Command
 
