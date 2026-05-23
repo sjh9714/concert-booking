@@ -10,19 +10,39 @@ Outbox/Kafka 이벤트 발행 실패**를 다루는 Spring Boot 백엔드 프로
 
 ---
 
+## 30초 요약
+
+이 저장소가 증명하는 것은 **고동시성 예매 도메인에서 좌석 overselling, 대기열 token 우회, 중복 요청,
+결제/만료 race, 이벤트 발행 실패를 어떻게 방어했는지**입니다.
+
+가장 강한 근거는 다음 세 가지입니다.
+
+| 근거 | 확인한 내용 | 범위 |
+| --- | --- | --- |
+| k6 측정 | 동일 좌석 100 concurrent requests에서 success 1, fail 99, overselling 0 | 로컬 Docker 단일 실행 |
+| k6 측정 | 50명/50좌석 분산 예매에서 비관적 50/50, 낙관적 20/50, Redis 분산 락 50/50 | 로컬 Docker 단일 실행 |
+| Testcontainers + 제한된 k6 검증 | 결제/만료 race, idempotency replay/conflict, 대기열 토큰 우회 차단 정책 | 시나리오 검증 |
+
+이 저장소가 주장하지 않는 것도 명확히 분리합니다.
+
+| 주장하지 않음 | 이유 |
+| --- | --- |
+| 운영 환경 TPS, SLO, capacity | 모든 성능 수치는 로컬 Docker 기준입니다. |
+| 평균/표준편차/신뢰구간 | A/B/C는 단일 실행 결과입니다. |
+| production-grade observability | metric contract와 local Prometheus artifact만 있습니다. |
+| 자동 장애 복구 시스템 | DLT replay와 Redis stock reconciliation은 관리자 수동 utility입니다. |
+
+---
+
 ## 핵심 문제
 
 | 문제 | 구현한 대응 |
 | --- | --- |
-| 동일 좌석 경합에서 overselling이 발생할 수 있음 | 비관적/낙관적/Redis 분산 락을 k6/Testcontainers로 비교 |
-| 예매 API에 직접 진입할 수 있음 | Redis Sorted Set 대기열과 `userId + scheduleId` 바인딩 입장 토큰 |
-| 결제 전 좌석이 임시 점유되어야 함 | `Seat.HELD`, reservation `expiresAt`, Redis seat hold TTL |
-| 다른 공연 일정의 좌석이 요청에 섞일 수 있음 | `scheduleId + seatIds + AVAILABLE` 조건으로 제한 |
-| 사용자가 더블클릭하거나 timeout 후 재요청할 수 있음 | `Idempotency-Key`와 DB unique constraint |
-| 결제/취소/만료가 동시에 실행될 수 있음 | reservation row lock과 도메인 상태 전이 메서드 |
-| DB commit 후 Kafka publish가 실패할 수 있음 | Outbox table, relay scheduler, retry/backoff/DEAD 상태 |
-| Consumer 처리 실패 메시지를 격리해야 함 | Spring Kafka DLT와 `ROLE_ADMIN` 기반 manual replay utility |
-| Redis stock과 DB 좌석 상태가 어긋날 수 있음 | DB `Seat.status = AVAILABLE` 기준 manual reconciliation utility |
+| 같은 좌석을 동시에 잡아도 overselling이 나면 안 됨 | 비관적/낙관적/Redis 분산 락 전략을 같은 API 계약에서 비교하고 테스트 |
+| 대기열을 거치지 않고 예매 API로 바로 들어오면 안 됨 | Redis Sorted Set 대기열과 `userId + scheduleId` 바인딩 입장 토큰 |
+| 더블클릭, timeout, 재시도가 중복 예매/결제로 이어지면 안 됨 | `Idempotency-Key`와 DB unique constraint로 replay/conflict 분리 |
+| 결제, 취소, 만료가 동시에 실행되어 상태가 꼬이면 안 됨 | reservation row lock과 도메인 상태 전이 메서드 |
+| DB commit 후 Kafka publish나 consumer 처리 실패가 사라지면 안 됨 | Outbox retry/backoff/DEAD, Spring Kafka DLT, 관리자 manual replay utility |
 
 ---
 
@@ -101,10 +121,10 @@ queue enter
 > 평균/표준편차/신뢰구간을 주장하지 않습니다.
 
 상세 수치와 한계는 [docs/PERF_RESULT.md](docs/PERF_RESULT.md)에 정리했습니다.
-결제/만료 race 검증(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E),
-대기열 token abuse 검증(Scenario F)은 refined smoke, pessimistic 단일 targeted run,
-세 전략 x 3회 formal local repeat로 branch/threshold를 다시 확인했습니다.
-이 결과는 branch/threshold 검증 근거이며, 운영 성능 claim으로 사용하지 않습니다.
+결제와 만료 동시 실행 검증, 중복 요청 replay/conflict 검증,
+대기열 토큰 우회 차단 검증은 짧은 smoke 실행, 비관적 락 단일 재현 실행,
+세 가지 락 전략의 로컬 3회 반복 실행으로 정책 분기와 실패 조건을 다시 확인했습니다.
+이 결과는 정합성 시나리오 검증 근거이며, 운영 성능 claim으로 사용하지 않습니다.
 
 ### Testcontainers Verified
 
@@ -359,17 +379,17 @@ bash k6/run-all.sh
 ```
 
 기본 전체 실행은 공개 측정 완료 항목인 scenario-a/b/c만 포함합니다.
-결제/만료 race 검증(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E),
-대기열 token abuse 검증(Scenario F)은 refined smoke, pessimistic 단일 targeted run,
-세 전략 x 3회 formal local repeat를 보존했습니다. 이 결과는 branch/threshold 시나리오 검증 근거이며
+결제와 만료 동시 실행 검증, 중복 요청 replay/conflict 검증,
+대기열 토큰 우회 차단 검증은 짧은 smoke 실행, 비관적 락 단일 재현 실행,
+세 가지 락 전략의 로컬 3회 반복 실행을 보존했습니다. 이 결과는 정합성 시나리오 검증 근거이며
 운영 latency/throughput/capacity claim으로 사용하지 않습니다.
-formal repeat 시나리오까지 함께 돌리려면 아래처럼 명시적으로 opt-in합니다.
+로컬 반복 검증 시나리오까지 함께 돌리려면 아래처럼 명시적으로 opt-in합니다.
 
 ```bash
 INCLUDE_PENDING=1 bash k6/run-all.sh
 ```
 
-Smoke 실행 예시:
+대기열 토큰 우회 차단 smoke 실행 예시:
 
 ```bash
 SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-f VUS=5 RUNS=1 USER_COUNT=4 SCHEDULE_ID=1 OTHER_SCHEDULE_ID=2 bash k6/run-all.sh
@@ -392,7 +412,7 @@ k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
 
 상세 내용은 [docs/PERF_RESULT.md](docs/PERF_RESULT.md)에 정리되어 있습니다.
 
-### A. Hot Seat Contention
+### A. 동일 좌석 경합
 
 조건: 100 VU, 동일 좌석 1개, per-vu-iterations 1회.
 
@@ -403,7 +423,7 @@ k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
 | overselling | 0건 | 0건 | 0건 |
 | p95 | 215ms | 106ms | 145ms |
 
-### B. Distributed Reservation
+### B. 분산 좌석 예약
 
 조건: 50 VU, 50개 좌석, 각 VU가 서로 다른 좌석 1개 예매.
 
@@ -412,7 +432,7 @@ k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
 | 성공률 | 100% (50/50) | 40% (20/50) | 100% (50/50) |
 | p95 | 95ms | 215ms | 126ms |
 
-### C. Mixed Load
+### C. 혼합 부하 테스트
 
 조건: 200 VU, 45초, 70% 조회 + 30% 예매.
 
@@ -431,7 +451,7 @@ k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
 | --- | --- |
 | 성능 수치 | 로컬 Docker 단일 실행 기준입니다. 실제 운영 환경 수치가 아닙니다. |
 | k6 결과 | A/B/C는 단일 실행 결과입니다. 평균, 표준편차, 신뢰구간을 계산하지 않았습니다. |
-| 세 시나리오 검증 | refined smoke, targeted run, 세 전략 x 3회 repeat로 branch/threshold를 확인했습니다. |
+| 세 시나리오 검증 | smoke 실행, 단일 재현 실행, 세 가지 락 전략의 로컬 3회 반복으로 정책 분기와 실패 조건을 확인했습니다. |
 | 결제 | 외부 PG 연동이 아니라 mock payment 즉시 성공 구조입니다. |
 | DLT replay | `ROLE_ADMIN` 권한으로 호출하는 manual utility입니다. 운영용 자동 복구 시스템이 아닙니다. |
 | Admin 계정 | 기본 회원가입은 `USER` 권한만 생성합니다. admin 계정 발급/운영 절차는 별도 과제입니다. |
