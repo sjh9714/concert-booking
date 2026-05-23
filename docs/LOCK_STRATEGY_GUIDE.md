@@ -1,9 +1,10 @@
 # Lock Strategy Guide
 
 이 문서는 Concert Booking의 세 가지 예매 전략을 언제 선택할지 설명합니다. 수치는
-`docs/PERF_RESULT.md`와 README에 이미 기록된 A/B/C k6 결과를 중심으로 해석합니다. D/E/F는
-세 전략 x 3회 formal local repeat를 branch/threshold 검증 근거로만 사용하고, 운영 성능 비교로
-확장하지 않습니다.
+`docs/PERF_RESULT.md`와 README에 이미 기록된 A/B/C k6 결과를 중심으로 해석합니다.
+결제/만료 race 검증(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E),
+대기열 token abuse 검증(Scenario F)은 세 전략 x 3회 formal local repeat를
+branch/threshold 검증 근거로만 사용하고, 운영 성능 비교로 확장하지 않습니다.
 
 ## 요약
 

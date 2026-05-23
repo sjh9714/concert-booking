@@ -397,5 +397,7 @@ reset이 맞추는 상태:
 - Kafka replay는 manual utility입니다.
 - Redis 장애 자동 fallback은 구현하지 않았습니다.
 - k6 A/B/C 결과는 로컬 Docker 단일 실행 기준입니다.
-- D/E/F는 refined smoke, pessimistic 단일 targeted run, 세 전략 x 3회 formal local repeat로 branch/threshold를 확인했습니다.
-- D/E/F 운영 성능 claim과 장기 반복 신뢰구간은 추가 측정 예정입니다.
+- 결제/만료 race 검증(Scenario D), 중복 요청 idempotency replay/conflict 검증(Scenario E),
+  대기열 token abuse 검증(Scenario F)은 refined smoke, pessimistic 단일 targeted run,
+  세 전략 x 3회 formal local repeat로 branch/threshold를 확인했습니다.
+- 세 시나리오의 운영 성능 claim과 장기 반복 신뢰구간은 추가 측정 예정입니다.
