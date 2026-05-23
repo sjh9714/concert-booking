@@ -136,6 +136,22 @@ jobs:
               if re.search(rf"{re.escape(scenario)}[^\n|]*\|[^\n]*측정 완료", text):
                   raise SystemExit(f"{scenario} must not be promoted to 측정 완료 without repeated benchmark evidence")
 
+          readme = Path("README.md").read_text(encoding="utf-8", errors="ignore")
+          required_image = "docs/assets/architecture/overall-architecture.svg"
+          if required_image not in readme:
+              raise SystemExit(f"README.md must reference {required_image}")
+
+          architecture_assets = Path("docs/assets/architecture")
+          raster_assets = [
+              path for path in architecture_assets.rglob("*")
+              if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+          ]
+          if raster_assets:
+              raise SystemExit(
+                  "Architecture docs must use SVG/drawio, not raster assets: "
+                  + ", ".join(str(path) for path in raster_assets)
+              )
+
           print("OK")
           PY
 
