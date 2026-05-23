@@ -1,0 +1,91 @@
+<mxfile host="app.diagrams.net" modified="2026-05-23T00:00:00.000Z" agent="codex" version="24.7.17">
+  <diagram id="concert-booking-overall" name="Concert Booking Overall Architecture">
+    <mxGraphModel dx="1280" dy="780" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="780" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Concert Booking 전체 아키텍처" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="48" y="28" width="360" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Queue Token → Reservation Tx → DB truth, Outbox/Kafka async events, DLT/manual replay/reconciliation failure boundary" style="text;html=1;strokeColor=none;fillColor=none;fontSize=13;align=left;verticalAlign=middle;fontColor=#344054;" vertex="1" parent="1">
+          <mxGeometry x="48" y="62" width="820" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="sync-zone" value="Synchronous request path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#cbd5e1;fontColor=#475467;fontStyle=1;align=left;verticalAlign=top;spacingLeft=18;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="110" width="1190" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="async-zone" value="Asynchronous event path" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#cbd5e1;fontColor=#475467;fontStyle=1;align=left;verticalAlign=top;spacingLeft=18;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="1190" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="failure-zone" value="Failure handling and consistency utilities" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#cbd5e1;fontColor=#475467;fontStyle=1;align=left;verticalAlign=top;spacingLeft=18;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="1190" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="client" value="&lt;b&gt;Client&lt;/b&gt;&lt;br&gt;web / k6 / admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#475467;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="70" y="175" width="130" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="queue-api" value="&lt;b&gt;Queue API&lt;/b&gt;&lt;br&gt;enter / token / SSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#475467;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="250" y="155" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="redis" value="&lt;b&gt;Redis Queue&lt;br&gt;/ Token / Stock&lt;/b&gt;&lt;br&gt;admission + pre-check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecfdf3;strokeColor=#067647;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="455" y="145" width="180" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="reservation-api" value="&lt;b&gt;Reservation API&lt;/b&gt;&lt;br&gt;queue token required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#475467;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="250" y="255" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="reservation-tx" value="&lt;b&gt;Reservation Tx&lt;/b&gt;&lt;br&gt;hold seat + outbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#475467;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="455" y="260" width="180" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="payment-api" value="&lt;b&gt;Payment API&lt;/b&gt;&lt;br&gt;confirm + idempotency" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#475467;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="705" y="155" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="expiration" value="&lt;b&gt;Expiration Scheduler&lt;/b&gt;&lt;br&gt;expire pending holds" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f3ff;strokeColor=#6941c6;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="705" y="260" width="180" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="postgres" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;seat / reservation / payment&lt;br&gt;DB is source of truth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#854d0e;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="955" y="175" width="190" height="102" as="geometry" />
+        </mxCell>
+        <mxCell id="outbox-table" value="&lt;b&gt;Outbox Table&lt;/b&gt;&lt;br&gt;PENDING / FAILED / DEAD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#854d0e;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="455" y="425" width="180" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="outbox-relay" value="&lt;b&gt;Outbox Relay&lt;/b&gt;&lt;br&gt;retry + backoff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#175cd3;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="705" y="425" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="kafka" value="&lt;b&gt;Kafka Topic&lt;/b&gt;&lt;br&gt;reservation events" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#175cd3;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="925" y="425" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="consumer" value="&lt;b&gt;Consumer&lt;/b&gt;&lt;br&gt;idempotent release" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#175cd3;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="925" y="525" width="150" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="dlt" value="&lt;b&gt;DLT&lt;/b&gt;&lt;br&gt;isolate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1f3;strokeColor=#c01048;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="525" width="80" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="admin-replay" value="&lt;b&gt;Admin Replay API&lt;/b&gt;&lt;br&gt;manual DLT replay" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff1f3;strokeColor=#c01048;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="250" y="655" width="170" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="reconciliation" value="&lt;b&gt;Reconciliation Job&lt;/b&gt;&lt;br&gt;DB count → Redis stock" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f3ff;strokeColor=#6941c6;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="455" y="655" width="190" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="&lt;b&gt;Boundary note&lt;/b&gt;&lt;br&gt;Simplified structure for implemented core flows and verification scope.&lt;br&gt;Not a production topology or production SLO claim." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9fafb;strokeColor=#d0d5dd;fontSize=13;align=left;spacingLeft=16;" vertex="1" parent="1">
+          <mxGeometry x="700" y="645" width="455" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="client" target="queue-api"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="queue-api" target="redis"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="redis" target="reservation-tx"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="client" target="reservation-api"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="reservation-api" target="reservation-tx"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="reservation-tx" target="postgres"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="reservation-tx" target="payment-api"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="payment-api" target="postgres"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="expiration" target="postgres"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="reservation-tx" target="outbox-table"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="outbox-table" target="outbox-relay"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="outbox-relay" target="kafka"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e13" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="kafka" target="consumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e14" style="endArrow=block;html=1;rounded=0;strokeColor=#344054;" edge="1" parent="1" source="consumer" target="dlt"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e15" style="endArrow=block;html=1;rounded=0;dashed=1;strokeColor=#667085;" edge="1" parent="1" source="dlt" target="admin-replay"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e16" style="endArrow=block;html=1;rounded=0;dashed=1;strokeColor=#667085;" edge="1" parent="1" source="reconciliation" target="redis"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e17" style="endArrow=block;html=1;rounded=0;dashed=1;strokeColor=#667085;" edge="1" parent="1" source="reconciliation" target="postgres"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e18" style="endArrow=block;html=1;rounded=0;dashed=1;strokeColor=#667085;" edge="1" parent="1" source="admin-replay" target="kafka"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
