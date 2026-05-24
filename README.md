@@ -47,7 +47,8 @@ Outbox/Kafka 이벤트 발행 실패**를 다루는 Spring Boot 백엔드 프로
 | Outbox Table을 비즈니스 트랜잭션 안에 기록 | DB commit 이후 Kafka publish 실패로 이벤트가 사라지는 구간을 줄이기 위해 | Testcontainers 검증 |
 | DLT, Admin Replay API, Reconciliation Job을 수동 경계로 분리 | 자동 복구 시스템이나 production SLO를 주장하지 않고 실패 대응 흐름을 제한하기 위해 | 로컬 검증 utility |
 
-상세 설명과 편집 가능한 drawio 원본은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
+상세 설명은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
+README에는 `overall-architecture.svg`를 기준으로 노출하고, drawio 파일은 편집 참고 자산으로 보관합니다.
 
 ---
 
