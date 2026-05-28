@@ -8,7 +8,7 @@ This document summarizes one local targeted run for 결제/만료 race 검증
 It is stronger than the earlier branch-covering smoke records because the three
 scenarios were run together through `k6/run-all.sh` without
 `SMOKE=1`, but it is still not a repeated benchmark, all-strategy comparison,
-throughput claim, latency claim, or production performance claim.
+throughput claim, latency claim, or production performance claim; claim boundary: local scenario evidence only.
 
 ## Command
 

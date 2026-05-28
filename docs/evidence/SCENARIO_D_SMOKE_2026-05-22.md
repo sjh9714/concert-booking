@@ -4,7 +4,7 @@
 
 This is a small local smoke record for the payment / expiration race path.
 It is not a formal load-test result and must not be used as throughput,
-latency, error-rate, or production performance evidence.
+latency, error-rate, or production performance evidence; claim boundary: local smoke evidence only.
 
 The latest run uses the refined `k6/scenario-d.js` assertion model:
 

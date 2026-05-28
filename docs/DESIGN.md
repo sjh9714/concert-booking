@@ -388,7 +388,7 @@ reset이 맞추는 상태:
 - `ConcertSchedule.availableSeats=50`
 - Redis stock=50
 - queue, active, token, inflight, seat hold key 삭제
-- `loadtest-user-{n}@k6.local` 사용자 보장
+- `loadtest-user-{n}@k6.local` 사용자 준비. Claim boundary: load-test reset fixture 범위로만 해석합니다.
 
 ## 13. Boundaries
 
