@@ -30,7 +30,7 @@ export function setup() {
     // 1. 부하 테스트 fixture 리셋
     const fixture = resetLoadTestData(SCHEDULE_ID, VUS);
 
-    // 2. reset endpoint가 보장한 deterministic 사용자 로그인
+    // 2. reset endpoint fixture 범위의 deterministic 사용자 로그인
     const users = setupUsers(VUS);
 
     // 3. 좌석 1개 ID 확보 (첫 번째 유저의 토큰으로 조회)

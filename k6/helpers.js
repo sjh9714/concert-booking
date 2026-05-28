@@ -184,7 +184,7 @@ export function loginLoadTestUsers(count, password = LOAD_TEST_PASSWORD) {
     return users;
 }
 
-// setup에서 사용자 일괄 준비 + 로그인. load-test reset이 사용자를 보장한다.
+// setup에서 사용자 일괄 준비 + 로그인. claim boundary: load-test reset fixture 범위로만 해석한다.
 export function setupUsers(count) {
     return loginLoadTestUsers(count, LOAD_TEST_PASSWORD);
 }
