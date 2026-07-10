@@ -31,12 +31,11 @@ require_command python3
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 MONITORING_ADMIN_EMAIL="${MONITORING_ADMIN_EMAIL:-monitor-admin@local}"
-MONITORING_ADMIN_PASSWORD="${MONITORING_ADMIN_PASSWORD:-monitor-admin-local-password}"
 TOKEN_FILE="${TOKEN_FILE:-monitoring/.generated/concert-booking.token}"
 
 cat >&2 <<EOF
 This script verifies a local monitoring harness only.
-Run the app separately with:
+Export MONITORING_ADMIN_PASSWORD once, then start the app separately from that shell:
   SPRING_PROFILES_ACTIVE=local-monitoring ./gradlew bootRun
 EOF
 

@@ -1,0 +1,9 @@
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+
+  web:
+    build:
+      args:
+        VITE_DEMO_MODE: "true"

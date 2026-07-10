@@ -38,7 +38,7 @@ import java.util.Set;
 
 @Slf4j
 @RestController
-@Profile("!prod")
+@Profile("(load-test | e2e | test) & !prod")
 @RequestMapping("/api/admin/load-test")
 @RequiredArgsConstructor
 public class LoadTestAdminController {
@@ -190,6 +190,7 @@ public class LoadTestAdminController {
 
         deleteByPattern("token:queue:*:" + scheduleId);
         deleteByPattern("token:queue:*:" + scheduleId + ":inflight");
+        deleteByPattern("marker:queue:*:" + scheduleId);
     }
 
     private void deleteByPattern(String pattern) {

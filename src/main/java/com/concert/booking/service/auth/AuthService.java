@@ -1,6 +1,7 @@
 package com.concert.booking.service.auth;
 
 import com.concert.booking.common.exception.UnauthorizedException;
+import com.concert.booking.common.exception.ConflictException;
 import com.concert.booking.common.jwt.JwtProvider;
 import com.concert.booking.domain.User;
 import com.concert.booking.dto.auth.LoginRequest;
@@ -23,7 +24,7 @@ public class AuthService {
     @Transactional
     public void signup(SignupRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+            throw new ConflictException("이미 사용 중인 이메일입니다.");
         }
 
         String encodedPassword = passwordEncoder.encode(request.password());

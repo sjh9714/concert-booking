@@ -2,8 +2,9 @@ package com.concert.booking.dto.payment;
 
 import com.concert.booking.domain.Payment;
 import com.concert.booking.domain.PaymentStatus;
+import com.concert.booking.common.util.ApiTime;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record PaymentResponse(
@@ -12,7 +13,7 @@ public record PaymentResponse(
         Long reservationId,
         int amount,
         PaymentStatus status,
-        LocalDateTime createdAt
+        OffsetDateTime createdAt
 ) {
     public static PaymentResponse from(Payment payment) {
         return new PaymentResponse(
@@ -21,7 +22,7 @@ public record PaymentResponse(
                 payment.getReservation().getId(),
                 payment.getAmount(),
                 payment.getStatus(),
-                payment.getCreatedAt()
+                ApiTime.toOffset(payment.getCreatedAt())
         );
     }
 }

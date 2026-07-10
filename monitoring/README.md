@@ -48,13 +48,16 @@ server scrape, alert firing, dashboard render, tracing, SLO 운영 증거로 해
 먼저 앱은 로컬 전용 monitoring admin bootstrap profile로 실행합니다.
 
 ```bash
-SPRING_PROFILES_ACTIVE=local-monitoring ./gradlew bootRun
+MONITORING_ADMIN_PASSWORD='replace-with-one-local-value' \
+  SPRING_PROFILES_ACTIVE=local-monitoring ./gradlew bootRun
 ```
 
-다른 shell에서 local Prometheus/Grafana harness와 capture를 실행합니다.
+다른 shell에서 앱 시작 시 사용한 것과 **동일한** 비밀번호를 전달해 local
+Prometheus/Grafana harness와 capture를 실행합니다.
 
 ```bash
-bash scripts/monitoring-local-verify.sh
+MONITORING_ADMIN_PASSWORD='replace-with-one-local-value' \
+  bash scripts/monitoring-local-verify.sh
 ```
 
 현재 보존된 `docs/evidence/monitoring/prometheus-20260522T155512Z/capture-summary.json`은 local Prometheus

@@ -5,6 +5,36 @@
 고동시성 콘서트 예매 상황에서 **동일 좌석 경합, 대기열 입장 제어, 중복 요청, 결제/만료 race,
 Outbox/Kafka 이벤트 발행 실패**를 다루는 Spring Boot 백엔드 프로젝트입니다.
 
+이제 저장소에는 같은 계약을 실제로 사용하는 React 제품 클라이언트도 포함됩니다. 공연 탐색부터
+대기열, 좌석 선택, 예매, 명시적인 데모 결제, 내 예매 확인까지 하나의 수직 흐름으로 실행할 수 있습니다.
+
+### 제품 데모 실행
+
+```bash
+cp .env.example .env
+# .env의 DB_PASSWORD와 JWT_SECRET을 로컬 전용 임의 값으로 교체
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build --wait web
+```
+
+브라우저에서 `http://localhost:4173`을 엽니다. 종료할 때는 아래 명령을 실행합니다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml down
+```
+
+실제 카드 정보는 받지 않으며 결제 버튼은 포트폴리오용 즉시 완료 데모입니다.
+
+Compose 역할은 명시적으로 나뉩니다.
+
+| 구성 | 목적 | Spring profile | 데모 UI |
+| --- | --- | --- | --- |
+| `docker-compose.yml` | 공통 인프라와 비시드 애플리케이션 기반 | `default` | 비활성 |
+| `docker-compose.demo.yml` | 사람이 직접 둘러보는 제품 데모 | `demo` | 활성 |
+| `docker-compose.e2e.yml` | Playwright 전용 fixture와 테스트 endpoint | `e2e` | 활성 |
+
+`demo`와 `e2e` 구성은 반드시 기본 파일 뒤에 오버레이로 지정합니다. `e2e` profile의
+load-test utility는 제품 데모에 노출되지 않습니다.
+
 이 프로젝트는 단순한 예매 CRUD가 아니라, 실제 예매 시스템에서 쉽게 깨지는 **좌석 정합성, 락 전략,
 멱등성, 이벤트 처리, Redis stock 불일치** 문제를 코드와 테스트로 검증하는 데 초점을 둡니다.
 
@@ -48,7 +78,7 @@ Outbox/Kafka 이벤트 발행 실패**를 다루는 Spring Boot 백엔드 프로
 | DLT, Admin Replay API, Reconciliation Job을 수동 경계로 분리 | 자동 복구 시스템이나 production SLO를 주장하지 않고 실패 대응 흐름을 제한하기 위해 | 로컬 검증 utility |
 
 상세 설명은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
-README에는 `overall-architecture.svg`를 기준으로 노출하고, drawio 파일은 편집 참고 자산으로 보관합니다.
+README와 상세 문서는 새로 작성한 `overall-architecture.svg`를 단일 구조도 원본으로 사용합니다.
 
 ---
 
@@ -282,7 +312,9 @@ Prometheus metric name이 보호된 `/actuator/prometheus` 응답에 노출되�
 > `scripts/capture-monitoring-evidence.sh`는 local Prometheus server가 준비됐을 때 target/rule/query artifact를
 > 남기는 도구이며, artifact 검토 전에는 운영형 observability claim으로 승격하지 않습니다.
 > `SPRING_PROFILES_ACTIVE=local-monitoring`은 로컬 전용 ADMIN 계정을 만들어 Prometheus bearer token scrape를
-> 검증하기 위한 profile입니다. production 인증/권한 운영 방식으로 해석하지 않습니다.
+> 검증하기 위한 profile입니다. 앱을 시작할 때 필수 `MONITORING_ADMIN_PASSWORD`를 명시하고,
+> `scripts/monitoring-local-verify.sh`에도 같은 값을 전달해야 합니다. production 인증/권한 운영 방식으로
+> 해석하지 않습니다.
 
 ---
 
@@ -322,7 +354,7 @@ Prometheus metric name이 보호된 `/actuator/prometheus` 응답에 노출되�
 | --- | --- | --- |
 | `POST` | `/api/reservations` | 좌석 예매. `queueToken` body, `Idempotency-Key` header 필수 |
 | `GET` | `/api/reservations/{id}` | 본인 예매 조회 |
-| `GET` | `/api/reservations/me` | 내 예매 목록 조회 |
+| `GET` | `/api/reservations/my` | 내 예매 목록 조회 |
 | `DELETE` | `/api/reservations/{id}` | 본인 예매 취소 |
 
 ### Payment
@@ -338,25 +370,50 @@ Prometheus metric name이 보호된 `/actuator/prometheus` 응답에 노출되�
 | --- | --- | --- |
 | `POST` | `/api/admin/dlt/replay` | `ROLE_ADMIN` 필요. DLT manual replay utility |
 | `POST` | `/api/admin/schedules/{scheduleId}/stock/reconcile` | `ROLE_ADMIN` 필요. Redis stock reconciliation |
-| `POST` | `/api/admin/load-test/reset` | `!prod` profile에서만 로드되는 k6 fixture utility |
+| `POST` | `/api/admin/load-test/reset` | `load-test`, `e2e`, `test` 전용 k6 fixture utility |
 
 ---
 
 ## 실행 방법
 
-### 1. 인프라 실행
+### 1. 로컬 환경 변수 준비
+
+`.env`는 Compose가 자동으로 읽지만 Gradle은 자동으로 읽지 않습니다. 아래처럼 shell에 명시적으로
+내보낸 뒤 실행합니다. `.env`와 `.env.*`는 Docker build context와 Git에서 제외됩니다.
+공유 가능한 키 이름과 예시 값만 `.env.example`에 둡니다.
 
 ```bash
-docker compose up -d
+cp .env.example .env
+# DB_PASSWORD와 JWT_SECRET을 로컬 전용 값으로 교체
+set -a
+source .env
+set +a
 ```
 
-### 2. 애플리케이션 실행
+### 2. 공통 인프라 실행
+
+기본 Compose 전체를 띄우지 않고 개발에 필요한 인프라만 지정합니다. Kafka UI가 필요하면
+마지막에 `kafka-ui`를 추가합니다.
+
+```bash
+docker compose up -d --wait postgres redis kafka kafka-init
+```
+
+### 3. 애플리케이션 실행
+
+기본 실행은 demo seed와 load-test endpoint를 만들지 않습니다.
 
 ```bash
 ./gradlew bootRun
 ```
 
-### 3. 락 전략 전환
+데모 데이터를 포함한 로컬 백엔드만 실행하려면 `demo` profile을 명시합니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun
+```
+
+### 4. 락 전략 전환
 
 ```bash
 ./gradlew bootRun --args="--reservation.strategy=pessimistic"
@@ -364,7 +421,7 @@ docker compose up -d
 ./gradlew bootRun --args="--reservation.strategy=distributed"
 ```
 
-### 4. 테스트 실행
+### 5. 테스트 실행
 
 통합 테스트는 Testcontainers로 PostgreSQL, Redis, Kafka를 실행합니다. Docker가 필요합니다.
 
@@ -373,16 +430,22 @@ docker compose up -d
 ./gradlew build
 ```
 
-### 5. k6 fixture 생성
+### 6. k6 fixture 생성
 
-`/api/admin/load-test/**` endpoint는 로컬 부하 테스트 재현성을 위한 endpoint이며, `!prod` profile에서만 로드됩니다.
+`/api/admin/load-test/**` endpoint는 로컬 부하 테스트 재현성을 위한 utility입니다. 일반 실행과
+`demo` profile에는 존재하지 않으며 `load-test`, `e2e`, `test`에서만 로드됩니다. 수동 k6 실행 전에는
+별도 terminal에서 다음처럼 애플리케이션을 시작합니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=load-test ./gradlew bootRun
+```
 
 ```bash
 curl -X POST "http://localhost:8080/api/admin/load-test/reset?scheduleId=1&userCount=200"
 curl "http://localhost:8080/api/admin/load-test/summary?scheduleId=1"
 ```
 
-### 6. k6 실행
+### 7. k6 실행
 
 ```bash
 k6 run k6/scenario-a.js

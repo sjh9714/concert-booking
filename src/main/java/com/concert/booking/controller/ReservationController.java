@@ -3,6 +3,7 @@ package com.concert.booking.controller;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.dto.reservation.ReservationSummaryResponse;
 import com.concert.booking.service.auth.CustomUserDetails;
 import com.concert.booking.service.reservation.ReservationService;
 import jakarta.validation.Valid;
@@ -38,7 +39,7 @@ public class ReservationController {
     }
 
     @GetMapping("/my")
-    public ResponseEntity<List<ReservationResponse>> getMyReservations(
+    public ResponseEntity<List<ReservationSummaryResponse>> getMyReservations(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(reservationService.getMyReservations(userDetails.getUserId()));
     }

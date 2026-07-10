@@ -1,0 +1,15 @@
+.git
+.gradle
+build
+.idea
+*.env
+.env
+.env.*
+!.env.example
+web
+k6
+docs
+monitoring
+scripts
+**/*.log
+**/.DS_Store

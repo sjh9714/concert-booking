@@ -40,6 +40,15 @@ public interface ReservationIdempotencyKeyRepository extends JpaRepository<Reser
             value = "DELETE FROM reservation_idempotency_keys WHERE id = :id AND status = 'PROCESSING'")
     int deleteProcessingById(@Param("id") Long id);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(nativeQuery = true, value = """
+            DELETE FROM reservation_idempotency_keys
+            WHERE id = :id
+              AND status = 'PROCESSING'
+              AND updated_at < NOW() - (:timeoutSeconds * INTERVAL '1 second')
+            """)
+    int deleteStaleProcessingById(@Param("id") Long id, @Param("timeoutSeconds") long timeoutSeconds);
+
     @Modifying
     @Query(nativeQuery = true,
             value = "DELETE FROM reservation_idempotency_keys WHERE schedule_id = :scheduleId")

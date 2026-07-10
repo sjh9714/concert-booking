@@ -7,12 +7,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByReservationId(Long reservationId);
 
     Optional<Payment> findByReservationIdAndIdempotencyKey(Long reservationId, String idempotencyKey);
+
+    List<Payment> findByReservationIdIn(Collection<Long> reservationIds);
 
     @Query(nativeQuery = true,
             value = "SELECT COUNT(*) FROM payments WHERE reservation_id IN (SELECT id FROM reservations WHERE schedule_id = :scheduleId)")

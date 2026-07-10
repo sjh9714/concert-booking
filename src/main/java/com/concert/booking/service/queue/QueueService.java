@@ -1,16 +1,24 @@
 package com.concert.booking.service.queue;
 
 import com.concert.booking.common.exception.QueueNotReadyException;
+import com.concert.booking.common.exception.ResourceNotFoundException;
 import com.concert.booking.common.util.RedisKeyUtil;
+import com.concert.booking.config.QueueProperties;
 import com.concert.booking.dto.queue.QueuePositionResponse;
+import com.concert.booking.dto.queue.QueueStatus;
 import com.concert.booking.dto.queue.QueueTokenResponse;
 import com.concert.booking.observability.BookingMetrics;
+import com.concert.booking.repository.ConcertScheduleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -18,55 +26,134 @@ public class QueueService {
 
     private final RedisTemplate<String, String> redisTemplate;
     private final BookingMetrics bookingMetrics;
+    private final QueueProperties properties;
+    private final ConcertScheduleRepository concertScheduleRepository;
 
-    private static final int ENTRY_THRESHOLD = 100; // 100등 이내 입장 가능
-    private static final int TOKEN_TTL_SECONDS = 300; // 5분
+    private static final DefaultRedisScript<String> ENTER_SCRIPT = new DefaultRedisScript<>("""
+            if redis.call('EXISTS', KEYS[2]) == 1 then
+                return 'ADMITTED'
+            end
 
-    // 대기열 진입: ZADD NX (중복 방지, score = timestamp)
+            redis.call('DEL', KEYS[3])
+            redis.call('ZADD', KEYS[1], 'NX', ARGV[2], ARGV[1])
+            return 'QUEUED'
+            """, String.class);
+
+    private static final DefaultRedisScript<String> POSITION_SCRIPT = new DefaultRedisScript<>("""
+            local total = redis.call('ZCARD', KEYS[1])
+            if redis.call('EXISTS', KEYS[2]) == 1 then
+                return 'ADMITTED||' .. total
+            end
+
+            if redis.call('EXISTS', KEYS[3]) == 1 then
+                return 'EXPIRED||' .. total
+            end
+
+            local rank = redis.call('ZRANK', KEYS[1], ARGV[1])
+            if not rank then
+                return 'NOT_JOINED||' .. total
+            end
+
+            local status = 'WAITING'
+            if rank < tonumber(ARGV[2]) then
+                status = 'READY'
+            end
+            return status .. '|' .. (rank + 1) .. '|' .. total
+            """, String.class);
+
+    private static final DefaultRedisScript<String> ISSUE_TOKEN_SCRIPT = new DefaultRedisScript<>("""
+            local existing = redis.call('GET', KEYS[2])
+            if existing then
+                if redis.call('EXISTS', KEYS[3]) == 0 then
+                    redis.call('SET', KEYS[3], 'ADMITTED', 'PX', redis.call('PTTL', KEYS[2]) + tonumber(ARGV[5]))
+                end
+                return 'ADMITTED|' .. existing .. '|' .. redis.call('PTTL', KEYS[2])
+            end
+
+            local rank = redis.call('ZRANK', KEYS[1], ARGV[1])
+            if not rank then
+                return 'NOT_JOINED||-1'
+            end
+            if rank >= tonumber(ARGV[2]) then
+                return 'WAITING||-1'
+            end
+
+            redis.call('SET', KEYS[2], ARGV[3], 'PX', ARGV[4])
+            redis.call('SET', KEYS[3], 'ADMITTED', 'PX', tonumber(ARGV[4]) + tonumber(ARGV[5]))
+            redis.call('ZREM', KEYS[1], ARGV[1])
+            return 'ISSUED|' .. ARGV[3] .. '|' .. redis.call('PTTL', KEYS[2])
+            """, String.class);
+
+    // 토큰 확인과 ZADD NX를 하나의 Lua script로 묶어 토큰 발급 직후 재삽입되는 race를 막는다.
     public QueuePositionResponse enter(Long userId, Long scheduleId) {
+        if (!concertScheduleRepository.existsById(scheduleId)) {
+            throw new ResourceNotFoundException("스케줄을 찾을 수 없습니다: " + scheduleId);
+        }
         String queueKey = RedisKeyUtil.queueKey(scheduleId);
-        double score = System.currentTimeMillis();
-
-        // NX: 이미 대기 중이면 무시 (중복 진입·순번 조작 방지)
-        redisTemplate.opsForZSet().addIfAbsent(queueKey, String.valueOf(userId), score);
+        String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
+        redisTemplate.execute(
+                ENTER_SCRIPT,
+                List.of(queueKey, tokenKey, RedisKeyUtil.admissionMarkerKey(userId, scheduleId)),
+                String.valueOf(userId),
+                String.valueOf(System.currentTimeMillis())
+        );
 
         return getPosition(userId, scheduleId);
     }
 
     // 순위 조회: ZRANK (0-based → 1-based)
     public QueuePositionResponse getPosition(Long userId, Long scheduleId) {
-        String queueKey = RedisKeyUtil.queueKey(scheduleId);
-        Long rank = redisTemplate.opsForZSet().rank(queueKey, String.valueOf(userId));
-        Long totalWaiting = redisTemplate.opsForZSet().size(queueKey);
-
-        if (rank == null) {
-            return new QueuePositionResponse(0L, totalWaiting != null ? totalWaiting : 0L, "대기열에 없습니다.");
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        String raw = redisTemplate.execute(
+                POSITION_SCRIPT,
+                List.of(
+                        RedisKeyUtil.queueKey(scheduleId),
+                        RedisKeyUtil.tokenKey(userId, scheduleId),
+                        RedisKeyUtil.admissionMarkerKey(userId, scheduleId)),
+                String.valueOf(userId),
+                String.valueOf(properties.getEntryThreshold())
+        );
+        if (raw == null) {
+            throw new IllegalStateException("대기열 순위 조회 결과를 확인할 수 없습니다.");
         }
 
-        long position = rank + 1; // 0-based → 1-based
-        String estimatedWaitTime = estimateWaitTime(position);
-
-        return new QueuePositionResponse(position, totalWaiting != null ? totalWaiting : 0L, estimatedWaitTime);
+        String[] result = raw.split("\\|", -1);
+        QueueStatus status = QueueStatus.valueOf(result[0]);
+        Long position = result[1].isEmpty() ? null : Long.parseLong(result[1]);
+        long totalWaiting = Long.parseLong(result[2]);
+        return new QueuePositionResponse(status, position, totalWaiting, now);
     }
 
-    // 입장 토큰 발급: 순위 ≤ threshold → UUID 생성, Redis SET EX 300
+    // 순위 확인, 토큰 저장, 대기열 제거를 Redis 서버에서 원자적으로 실행한다.
     public QueueTokenResponse issueToken(Long userId, Long scheduleId) {
         String queueKey = RedisKeyUtil.queueKey(scheduleId);
-        Long rank = redisTemplate.opsForZSet().rank(queueKey, String.valueOf(userId));
-
-        if (rank == null || rank + 1 > ENTRY_THRESHOLD) {
-            throw new QueueNotReadyException("아직 입장 순서가 아닙니다. 대기열에서 기다려주세요.");
+        String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
+        String candidate = UUID.randomUUID().toString();
+        String raw = redisTemplate.execute(
+                ISSUE_TOKEN_SCRIPT,
+                List.of(queueKey, tokenKey, RedisKeyUtil.admissionMarkerKey(userId, scheduleId)),
+                String.valueOf(userId),
+                String.valueOf(properties.getEntryThreshold()),
+                candidate,
+                String.valueOf(properties.getTokenTtl().toMillis()),
+                String.valueOf(properties.getExpiryTombstoneTtl().toMillis())
+        );
+        if (raw == null) {
+            throw new IllegalStateException("대기열 토큰 발급 결과를 확인할 수 없습니다.");
         }
 
-        String token = UUID.randomUUID().toString();
-        String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
-        redisTemplate.opsForValue().set(tokenKey, token, TOKEN_TTL_SECONDS, TimeUnit.SECONDS);
+        String[] result = raw.split("\\|", -1);
+        if (result[0].equals("WAITING") || result[0].equals("NOT_JOINED")) {
+            throw new QueueNotReadyException("아직 입장 순서가 아닙니다. 대기열에서 기다려주세요.");
+        }
+        if (result[0].equals("ISSUED")) {
+            bookingMetrics.recordQueueTokenIssued();
+        }
 
-        // 대기열에서 제거
-        removeFromQueue(userId, scheduleId);
-        bookingMetrics.recordQueueTokenIssued();
-
-        return new QueueTokenResponse(token, scheduleId);
+        long ttlMillis = Long.parseLong(result[2]);
+        OffsetDateTime expiresAt = OffsetDateTime.now(ZoneOffset.UTC)
+                .plus(Duration.ofMillis(Math.max(0, ttlMillis)));
+        return new QueueTokenResponse(result[1], scheduleId, expiresAt);
     }
 
     // 토큰 검증: GET + 값 비교 + userId/scheduleId 바인딩 확인
@@ -84,6 +171,7 @@ public class QueueService {
     public void consumeToken(Long userId, Long scheduleId) {
         String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
         redisTemplate.delete(tokenKey);
+        redisTemplate.delete(RedisKeyUtil.admissionMarkerKey(userId, scheduleId));
     }
 
     // 대기열 제거: ZREM
@@ -92,15 +180,4 @@ public class QueueService {
         redisTemplate.opsForZSet().remove(queueKey, String.valueOf(userId));
     }
 
-    private String estimateWaitTime(long position) {
-        if (position <= ENTRY_THRESHOLD) {
-            return "곧 입장 가능합니다.";
-        }
-        // 약 10초당 100명 처리 가정
-        long waitSeconds = (position - ENTRY_THRESHOLD) / 10;
-        if (waitSeconds < 60) {
-            return "약 " + Math.max(1, waitSeconds) + "초";
-        }
-        return "약 " + (waitSeconds / 60) + "분";
-    }
 }

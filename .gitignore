@@ -16,9 +16,17 @@ Thumbs.db
 # Application
 *.log
 *.env
+.env
+.env.*
+!.env.example
 
 # Test
 /test-results/
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+.playwright-cli/
 __pycache__/
 *.pyc
 

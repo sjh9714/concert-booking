@@ -987,16 +987,19 @@ ZADD queue:schedule:1 1707123457.456 "user:7"
 public SseEmitter streamPosition(@RequestParam Long scheduleId) {
     SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);  // 5분 타임아웃
 
-    // 1초마다 순위 전송
-    scheduler.scheduleAtFixedRate(() -> {
+    // 전용 shared scheduler가 1초마다 순위를 전송
+    queueTaskScheduler.scheduleAtFixedRate(() -> {
         QueuePositionResponse position = queueService.getPosition(userId, scheduleId);
         emitter.send(SseEmitter.event().name("POSITION").data(position));
 
-        if (position.position() <= ENTRY_THRESHOLD) {
-            emitter.send(SseEmitter.event().name("READY").data("입장 가능"));
-            emitter.complete();  // SSE 종료
+        if (position.status() == QueueStatus.READY) {
+            emitter.send(SseEmitter.event().name("READY").data(position));
         }
-    }, 0, 1, TimeUnit.SECONDS);
+        if (position.status() == QueueStatus.ADMITTED) {
+            emitter.send(SseEmitter.event().name("COMPLETED").data(position));
+            emitter.complete();  // 토큰 발급이 확인된 뒤 종료
+        }
+    }, Instant.now().plusSeconds(1), Duration.ofSeconds(1));
 
     return emitter;
 }
@@ -1459,14 +1462,17 @@ public record ConcertResponse(Long id, String title, ...) {
 ### 4. DataInitializer
 ```java
 @Component
-@Profile("!test")  // 테스트에서는 비활성화
+@Profile("(demo | e2e | load-test) & !prod")
 public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         if (concertRepository.count() > 0) return;  // 멱등성
-        // 테스트 데이터 자동 생성
+        // 명시적인 로컬 demo/e2e/load-test fixture만 생성
     }
 }
 ```
+
+기본 실행과 `prod`에서는 seed가 생성되지 않습니다. 특히 `prod`와 로컬 profile을 동시에
+활성화해도 `!prod` 조건 때문에 이 initializer는 로드되지 않습니다.
 
 ---
 
