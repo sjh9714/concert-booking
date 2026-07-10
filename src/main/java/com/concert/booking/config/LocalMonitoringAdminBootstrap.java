@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-@Profile("local-monitoring")
+@Profile("local-monitoring & !prod")
 @RequiredArgsConstructor
 public class LocalMonitoringAdminBootstrap {
 
@@ -22,7 +22,7 @@ public class LocalMonitoringAdminBootstrap {
     @Bean
     CommandLineRunner localMonitoringAdminUser(
             @Value("${monitoring.admin.email:monitor-admin@local}") String email,
-            @Value("${monitoring.admin.password:monitor-admin-local-password}") String password
+            @Value("${monitoring.admin.password}") String password
     ) {
         return args -> userRepository.findByEmail(email)
                 .ifPresentOrElse(existing -> {

@@ -3,6 +3,7 @@ package com.concert.booking.integration;
 import com.concert.booking.config.TestContainersConfig;
 import com.concert.booking.dto.auth.LoginRequest;
 import com.concert.booking.dto.auth.SignupRequest;
+import com.concert.booking.common.util.RedisKeyUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,8 +14,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -28,6 +31,9 @@ class AuthIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
 
     @Test
     @DisplayName("회원가입 성공")
@@ -91,6 +97,46 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("공연 카탈로그는 공개하고 내 정보는 인증된 사용자에게만 제공한다")
+    void public_catalog_and_authenticated_me() throws Exception {
+        mockMvc.perform(get("/api/concerts"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/users/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        SignupRequest signup = new SignupRequest("me-test@test.com", "password123", "내정보테스터");
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(signup)))
+                .andExpect(status().isCreated());
+
+        String response = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("me-test@test.com", "password123"))))
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(response).get("token").asText();
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("me-test@test.com"))
+                .andExpect(jsonPath("$.nickname").value("내정보테스터"));
+
+        long missingScheduleId = Long.MAX_VALUE;
+        mockMvc.perform(post("/api/queue/enter")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scheduleId\":" + missingScheduleId + "}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+        org.assertj.core.api.Assertions.assertThat(
+                        redisTemplate.hasKey(RedisKeyUtil.queueKey(missingScheduleId)))
+                .isFalse();
     }
 }

@@ -3,6 +3,7 @@ package com.concert.booking.service.reservation;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.dto.reservation.ReservationSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,7 @@ public class PessimisticLockReservationService implements ReservationService, Se
     }
 
     @Override
-    public List<ReservationResponse> getMyReservations(Long userId) {
+    public List<ReservationSummaryResponse> getMyReservations(Long userId) {
         return reservationQueryService.getMyReservations(userId);
     }
 

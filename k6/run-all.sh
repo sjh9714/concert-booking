@@ -101,7 +101,8 @@ for strategy in "${STRATEGIES[@]}"; do
 
     echo "[INFO] $strategy 전략으로 앱 시작..."
     cd "$PROJECT_DIR"
-    ./gradlew bootRun --args="--reservation.strategy=$strategy" > "$STRATEGY_DIR/app.log" 2>&1 &
+    SPRING_PROFILES_ACTIVE=load-test ./gradlew bootRun \
+        --args="--reservation.strategy=$strategy" > "$STRATEGY_DIR/app.log" 2>&1 &
     APP_PID=$!
 
     echo "[INFO] 앱 준비 대기 중..."

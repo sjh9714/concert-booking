@@ -1,35 +1,49 @@
 package com.concert.booking.controller;
 
+import com.concert.booking.config.QueueProperties;
 import com.concert.booking.dto.queue.QueueEnterRequest;
 import com.concert.booking.dto.queue.QueuePositionResponse;
+import com.concert.booking.dto.queue.QueueStatus;
 import com.concert.booking.dto.queue.QueueTokenResponse;
 import com.concert.booking.service.auth.CustomUserDetails;
 import com.concert.booking.service.queue.QueueService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @RestController
 @RequestMapping("/api/queue")
-@RequiredArgsConstructor
 public class QueueController {
 
     private final QueueService queueService;
+    private final QueueProperties properties;
+    private final TaskScheduler queueTaskScheduler;
 
-    private static final int ENTRY_THRESHOLD = 100;
-    private static final long SSE_TIMEOUT = 5 * 60 * 1000L; // 5분
+    public QueueController(
+            QueueService queueService,
+            QueueProperties properties,
+            @Qualifier("queueTaskScheduler") TaskScheduler queueTaskScheduler) {
+        this.queueService = queueService;
+        this.properties = properties;
+        this.queueTaskScheduler = queueTaskScheduler;
+    }
 
     // POST /api/queue/enter — 대기열 진입
     @PostMapping("/enter")
@@ -55,47 +69,57 @@ public class QueueController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam Long scheduleId) {
 
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
+        SseEmitter emitter = new SseEmitter(properties.getSseTimeout().toMillis());
         Long userId = userDetails.getUserId();
+        AtomicReference<ScheduledFuture<?>> taskRef = new AtomicReference<>();
+        AtomicBoolean readySent = new AtomicBoolean(false);
+        AtomicReference<OffsetDateTime> lastHeartbeat = new AtomicReference<>(OffsetDateTime.now(ZoneOffset.UTC));
 
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-
-        // 매 1초마다 순위 전송
-        scheduler.scheduleAtFixedRate(() -> {
+        Runnable update = () -> {
             try {
                 QueuePositionResponse position = queueService.getPosition(userId, scheduleId);
+                emitter.send(SseEmitter.event().name("POSITION").data(position));
 
-                if (position.position() == 0) {
-                    // 대기열에서 이미 제거됨 (토큰 발급 완료)
+                if (position.status() == QueueStatus.ADMITTED) {
                     emitter.send(SseEmitter.event()
                             .name("COMPLETED")
-                            .data("대기열에서 제거되었습니다."));
+                            .data(position));
                     emitter.complete();
-                    scheduler.shutdown();
+                    cancel(taskRef);
                     return;
                 }
 
-                emitter.send(SseEmitter.event()
-                        .name("POSITION")
-                        .data(position));
-
-                // 순위 ≤ threshold → READY 이벤트 전송
-                if (position.position() <= ENTRY_THRESHOLD) {
+                if (position.status() == QueueStatus.READY && readySent.compareAndSet(false, true)) {
                     emitter.send(SseEmitter.event()
                             .name("READY")
-                            .data("입장 가능합니다. 토큰을 발급받아주세요."));
-                    emitter.complete();
-                    scheduler.shutdown();
+                            .data(position));
                 }
-            } catch (IOException e) {
-                emitter.completeWithError(e);
-                scheduler.shutdown();
-            }
-        }, 0, 1, TimeUnit.SECONDS);
 
-        emitter.onCompletion(scheduler::shutdown);
-        emitter.onTimeout(scheduler::shutdown);
-        emitter.onError(e -> scheduler.shutdown());
+                OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+                if (lastHeartbeat.get().plus(properties.getHeartbeatInterval()).isBefore(now)) {
+                    emitter.send(SseEmitter.event().name("HEARTBEAT").data("heartbeat"));
+                    lastHeartbeat.set(now);
+                }
+            } catch (AsyncRequestNotUsableException e) {
+                log.debug("Queue SSE response is no longer usable: userId={}, scheduleId={}", userId, scheduleId);
+                cancel(taskRef);
+            } catch (IOException e) {
+                log.debug("Queue SSE client disconnected: userId={}, scheduleId={}", userId, scheduleId);
+                cancel(taskRef);
+            } catch (RuntimeException e) {
+                emitter.completeWithError(e);
+                cancel(taskRef);
+            }
+        };
+
+        taskRef.set(queueTaskScheduler.scheduleAtFixedRate(
+                update,
+                Instant.now().plus(properties.getUpdateInterval()),
+                properties.getUpdateInterval()));
+
+        emitter.onCompletion(() -> cancel(taskRef));
+        emitter.onTimeout(() -> cancel(taskRef));
+        emitter.onError(e -> cancel(taskRef));
 
         return emitter;
     }
@@ -107,5 +131,12 @@ public class QueueController {
             @RequestParam Long scheduleId) {
         QueueTokenResponse response = queueService.issueToken(userDetails.getUserId(), scheduleId);
         return ResponseEntity.ok(response);
+    }
+
+    private void cancel(AtomicReference<ScheduledFuture<?>> taskRef) {
+        ScheduledFuture<?> task = taskRef.getAndSet(null);
+        if (task != null) {
+            task.cancel(false);
+        }
     }
 }

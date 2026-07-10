@@ -4,6 +4,7 @@ import com.concert.booking.common.exception.SeatNotAvailableException;
 import com.concert.booking.dto.reservation.ReservationDetailResponse;
 import com.concert.booking.dto.reservation.ReservationRequest;
 import com.concert.booking.dto.reservation.ReservationResponse;
+import com.concert.booking.dto.reservation.ReservationSummaryResponse;
 import com.concert.booking.service.stock.RedisStockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,7 +84,7 @@ public class DistributedLockReservationService implements ReservationService, Se
     }
 
     @Override
-    public List<ReservationResponse> getMyReservations(Long userId) {
+    public List<ReservationSummaryResponse> getMyReservations(Long userId) {
         return reservationQueryService.getMyReservations(userId);
     }
 

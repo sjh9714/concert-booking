@@ -372,7 +372,9 @@ POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=true
 
 ## 12. k6 Reproducibility
 
-부하 테스트 전용 reset endpoint는 `@Profile("!prod")`로 제한합니다.
+부하 테스트 전용 reset endpoint는
+`@Profile("(load-test | e2e | test) & !prod")`로 제한합니다. 기본·`demo`·`prod`
+profile에는 controller가 존재하지 않으며, 인증 없는 접근은 명시적인 로컬 검증 profile에서만 허용합니다.
 
 ```text
 POST /api/admin/load-test/reset?scheduleId=1&userCount=200

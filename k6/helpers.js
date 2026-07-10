@@ -120,7 +120,7 @@ function reservationIdempotencyKey(scheduleId, seatIds) {
     return `reservation-${scheduleId}-${seatIds.join('-')}-${__VU}-${__ITER}-${Date.now()}-${Math.random()}`;
 }
 
-// k6 전용 fixture 리셋: !prod profile에서만 노출되는 endpoint를 사용한다.
+// k6 전용 fixture 리셋: 명시적인 load-test/e2e/test profile에서만 노출된다.
 export function resetLoadTestData(scheduleId, userCount = 200) {
     const res = http.post(`${BASE_URL}/api/admin/load-test/reset?scheduleId=${scheduleId}&userCount=${userCount}`, null, {
         headers: HEADERS,

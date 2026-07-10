@@ -27,6 +27,7 @@ public class QueueTokenGuard {
 
         String tokenKey = RedisKeyUtil.tokenKey(userId, scheduleId);
         String inFlightKey = RedisKeyUtil.tokenInFlightKey(userId, scheduleId);
+        String markerKey = RedisKeyUtil.admissionMarkerKey(userId, scheduleId);
 
         validateStoredToken(tokenKey, token);
 
@@ -39,7 +40,7 @@ public class QueueTokenGuard {
 
         try {
             validateStoredToken(tokenKey, token);
-            return new TokenLease(tokenKey, inFlightKey);
+            return new TokenLease(tokenKey, inFlightKey, markerKey);
         } catch (RuntimeException e) {
             redisTemplate.delete(inFlightKey);
             throw e;
@@ -49,6 +50,7 @@ public class QueueTokenGuard {
     public void consume(TokenLease lease) {
         redisTemplate.delete(lease.tokenKey());
         redisTemplate.delete(lease.inFlightKey());
+        redisTemplate.delete(lease.markerKey());
     }
 
     public void release(TokenLease lease) {
@@ -63,6 +65,6 @@ public class QueueTokenGuard {
         }
     }
 
-    public record TokenLease(String tokenKey, String inFlightKey) {
+    public record TokenLease(String tokenKey, String inFlightKey, String markerKey) {
     }
 }

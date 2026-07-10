@@ -22,8 +22,10 @@
 
 ## 2. Data Setup
 
-k6 스크립트는 같은 fixture에서 시작할 수 있도록 `!prod` profile 전용 load-test reset endpoint를 사용합니다.
-일반 `/api/admin/**` utility는 `ROLE_ADMIN` 권한이 필요하지만, `/api/admin/load-test/**`는 로컬 부하 테스트 재현성을 위해 `!prod` profile에서만 인증 없이 노출됩니다.
+k6 스크립트는 같은 fixture에서 시작할 수 있도록 `load-test`, `e2e`, `test` profile 전용
+load-test reset endpoint를 사용합니다. 일반 `/api/admin/**` utility는 `ROLE_ADMIN` 권한이 필요하지만,
+`/api/admin/load-test/**`는 이 명시적인 로컬 검증 profile에서만 인증 없이 노출됩니다.
+기본·`demo`·`prod` profile에는 controller 자체가 존재하지 않습니다.
 
 ```bash
 POST /api/admin/load-test/reset?scheduleId=1&userCount=200
@@ -288,8 +290,8 @@ Redis 분산 락 전략은 DB transaction 전에 Redis stock을 먼저 감소시
 ## 8. How To Re-run
 
 ```bash
-docker compose up -d
-./gradlew bootRun --args="--reservation.strategy=distributed"
+docker compose up -d --wait postgres redis kafka kafka-init
+SPRING_PROFILES_ACTIVE=load-test ./gradlew bootRun --args="--reservation.strategy=distributed"
 curl -X POST "http://localhost:8080/api/admin/load-test/reset?scheduleId=1&userCount=200"
 k6 run k6/scenario-a.js
 ```
@@ -297,7 +299,8 @@ k6 run k6/scenario-a.js
 전체 실행:
 
 ```bash
-bash k6/run-all.sh
+docker compose up -d --wait postgres redis kafka kafka-init
+SPRING_PROFILES_ACTIVE=load-test bash k6/run-all.sh
 ```
 
 결과 경로:

@@ -9,6 +9,7 @@ import com.concert.booking.dto.reservation.ReservationResponse;
 import com.concert.booking.repository.ReservationIdempotencyKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,6 +40,9 @@ public class ReservationIdempotencyService {
 
     private final ReservationIdempotencyKeyRepository repository;
     private final PlatformTransactionManager transactionManager;
+
+    @Value("${reservation.idempotency.processing-timeout:30s}")
+    private Duration processingTimeout;
 
     public ReservationClaim claimOrReplay(Long userId, Long scheduleId, String idempotencyKey, List<Long> seatIds) {
         validateIdempotencyKey(idempotencyKey);
@@ -89,6 +93,9 @@ public class ReservationIdempotencyService {
         if (key.getStatus() == ReservationIdempotencyStatus.COMPLETED && key.getReservation() != null) {
             return ReservationClaim.replay(ReservationResponse.from(key.getReservation()));
         }
+
+        long timeoutSeconds = Math.max(1, processingTimeout.toSeconds());
+        repository.deleteStaleProcessingById(key.getId(), timeoutSeconds);
 
         return ReservationClaim.inProgress();
     }

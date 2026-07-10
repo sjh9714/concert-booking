@@ -15,6 +15,11 @@ public final class RedisKeyUtil {
         return "token:queue:" + userId + ":" + scheduleId;
     }
 
+    // 토큰 TTL 종료와 미진입 상태를 구분하기 위한 짧은 수명 marker
+    public static String admissionMarkerKey(Long userId, Long scheduleId) {
+        return "marker:queue:" + userId + ":" + scheduleId;
+    }
+
     // 입장 토큰 동시 사용 방지
     public static String tokenInFlightKey(Long userId, Long scheduleId) {
         return tokenKey(userId, scheduleId) + ":inflight";

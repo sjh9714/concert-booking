@@ -18,10 +18,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -59,6 +64,7 @@ class ReservationIdempotencyIntegrationTest {
     @Autowired private ReservationRepository reservationRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private RedisTemplate<String, String> redisTemplate;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName("세 예약 전략 모두 같은 idempotency key 동일 요청 재시도 시 기존 예매를 반환한다")
@@ -134,9 +140,20 @@ class ReservationIdempotencyIntegrationTest {
             assertThat(doneGate.await(10, TimeUnit.SECONDS)).as(strategy.name()).isTrue();
             executor.shutdown();
 
-            assertThat(errors).as(strategy.name()).isEmpty();
+            assertThat(errors)
+                    .as("%s concurrent request errors: %s", strategy.name(), errors.stream()
+                            .map(error -> error.getClass().getName() + ": " + error.getMessage())
+                            .toList())
+                    .allSatisfy(error ->
+                    assertThat(error)
+                            .isInstanceOf(ConflictException.class)
+                            .hasMessageContaining("아직 처리 중"));
             assertThat(reservationIds).as(strategy.name()).hasSize(1);
             assertThat(reservationsFor(scenario.userId(), scenario.scheduleId())).as(strategy.name()).hasSize(1);
+
+            ReservationResponse replay = strategy.service().reserve(
+                    scenario.userId(), request, idempotencyKey);
+            assertThat(replay.id()).as(strategy.name()).isEqualTo(reservationIds.iterator().next());
         }
     }
 
@@ -168,6 +185,28 @@ class ReservationIdempotencyIntegrationTest {
                     .as(strategy.name() + " too many")
                     .isInstanceOf(BadRequestException.class);
         }
+    }
+
+    @Test
+    @DisplayName("오래 멈춘 PROCESSING 멱등성 키는 회수한 뒤 예매를 정상 처리한다")
+    void stale_processing_claim_is_recovered() {
+        Scenario scenario = createScenario("stale", 2);
+        Long seatId = scenario.seatIds().get(0);
+        String idempotencyKey = key("pessimistic", "stale");
+        jdbcTemplate.update("""
+                INSERT INTO reservation_idempotency_keys
+                    (user_id, schedule_id, idempotency_key, request_hash, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'PROCESSING', NOW() - INTERVAL '5 minutes', NOW() - INTERVAL '5 minutes')
+                """, scenario.userId(), scenario.scheduleId(), idempotencyKey, requestHash(seatId));
+
+        String token = issueToken(scenario.userId(), scenario.scheduleId());
+        ReservationResponse response = pessimisticService.reserve(
+                scenario.userId(),
+                request(scenario.scheduleId(), List.of(seatId), token),
+                idempotencyKey);
+
+        assertThat(response.id()).isNotNull();
+        assertThat(reservationsFor(scenario.userId(), scenario.scheduleId())).hasSize(1);
     }
 
     private List<StrategyCase> strategies() {
@@ -221,6 +260,15 @@ class ReservationIdempotencyIntegrationTest {
         return reservationRepository.findByUserId(userId).stream()
                 .filter(reservation -> reservation.getSchedule().getId().equals(scheduleId))
                 .toList();
+    }
+
+    private String requestHash(Long seatId) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(String.valueOf(seatId).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private record StrategyCase(String name, ReservationService service) {

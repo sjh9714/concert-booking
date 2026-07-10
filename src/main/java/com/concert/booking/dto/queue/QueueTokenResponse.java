@@ -1,7 +1,10 @@
 package com.concert.booking.dto.queue;
 
+import java.time.OffsetDateTime;
+
 public record QueueTokenResponse(
         String token,
-        Long scheduleId
+        Long scheduleId,
+        OffsetDateTime expiresAt
 ) {
 }

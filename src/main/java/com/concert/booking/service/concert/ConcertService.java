@@ -1,5 +1,7 @@
 package com.concert.booking.service.concert;
 
+import com.concert.booking.common.exception.BadRequestException;
+import com.concert.booking.common.exception.ResourceNotFoundException;
 import com.concert.booking.domain.Concert;
 import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.Seat;
@@ -32,13 +34,13 @@ public class ConcertService {
 
     public ConcertResponse getConcert(Long concertId) {
         Concert concert = concertRepository.findById(concertId)
-                .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다: " + concertId));
+                .orElseThrow(() -> new ResourceNotFoundException("콘서트를 찾을 수 없습니다: " + concertId));
         return ConcertResponse.from(concert);
     }
 
     public List<ConcertScheduleResponse> getSchedules(Long concertId) {
         if (!concertRepository.existsById(concertId)) {
-            throw new IllegalArgumentException("콘서트를 찾을 수 없습니다: " + concertId);
+            throw new ResourceNotFoundException("콘서트를 찾을 수 없습니다: " + concertId);
         }
         List<ConcertSchedule> schedules = concertScheduleRepository.findByConcertId(concertId);
         return schedules.stream()
@@ -48,10 +50,10 @@ public class ConcertService {
 
     public List<SeatResponse> getSeats(Long concertId, Long scheduleId) {
         ConcertSchedule schedule = concertScheduleRepository.findById(scheduleId)
-                .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다: " + scheduleId));
+                .orElseThrow(() -> new ResourceNotFoundException("스케줄을 찾을 수 없습니다: " + scheduleId));
 
         if (!schedule.getConcert().getId().equals(concertId)) {
-            throw new IllegalArgumentException("해당 콘서트의 스케줄이 아닙니다.");
+            throw new BadRequestException("해당 콘서트의 스케줄이 아닙니다.");
         }
 
         List<Seat> seats = seatRepository.findByScheduleId(scheduleId);
