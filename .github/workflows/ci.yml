@@ -164,6 +164,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import re
+          import struct
           from pathlib import Path
 
           sources = [Path("README.md")] + list(Path("docs").rglob("*.md"))
@@ -179,20 +180,32 @@ jobs:
                   raise SystemExit(f"{scenario} must not be promoted to 측정 완료 without repeated benchmark evidence")
 
           readme = Path("README.md").read_text(encoding="utf-8", errors="ignore")
-          required_image = "docs/assets/architecture/overall-architecture.svg"
-          if required_image not in readme:
-              raise SystemExit(f"README.md must reference {required_image}")
-
-          architecture_assets = Path("docs/assets/architecture")
-          raster_assets = [
-              path for path in architecture_assets.rglob("*")
-              if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
-          ]
-          if raster_assets:
+          if "docs/assets/architecture/overall-architecture.svg" in readme:
               raise SystemExit(
-                  "Architecture docs must use SVG/drawio, not raster assets: "
-                  + ", ".join(str(path) for path in raster_assets)
+                  "README.md must lead with the real product screen and focused failure stories, "
+                  "not the legacy all-in-one architecture SVG"
               )
+
+          asset_pairs = (
+              ("seat-loser-recovery.png", "seat-loser-recovery.drawio"),
+              ("event-recovery-boundaries.png", "event-recovery-boundaries.drawio"),
+          )
+          asset_dir = Path("docs/assets/architecture")
+          for png_name, drawio_name in asset_pairs:
+              png = asset_dir / png_name
+              drawio = asset_dir / drawio_name
+              if not png.is_file() or not drawio.is_file():
+                  raise SystemExit(f"Missing focused diagram source/export pair: {png_name}, {drawio_name}")
+              if f"docs/assets/architecture/{png_name}" not in readme:
+                  raise SystemExit(f"README.md must reference {png_name}")
+              if f"docs/assets/architecture/{drawio_name}" not in readme:
+                  raise SystemExit(f"README.md must link editable source {drawio_name}")
+              width, height = struct.unpack(">II", png.read_bytes()[16:24])
+              if width < 2400 or height < 700:
+                  raise SystemExit(f"Diagram export is not 2x-sized: {png_name} ({width}x{height})")
+
+          if readme.count("그림 transcript:") < 2:
+              raise SystemExit("README.md must include a numbered text transcript for each diagram")
 
           print("OK")
           PY
