@@ -1,0 +1,56 @@
+<mxfile host="drawio-headless" compressed="false" version="0.1.0">
+  <diagram id="p1" name="Event recovery boundaries">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="commit" value="1  취소 · 만료 Tx
+Outbox PENDING commit" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2457D6;strokeWidth=3;fontColor=#163B78;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="40" y="190" width="250" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="relay" value="2  Outbox Relay
+Kafka publish" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F6F8FA;strokeColor=#8C959F;strokeWidth=3;fontColor=#24292F;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="350" y="190" width="230" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="failed" value="3A  publish 실패
+FAILED · backoff" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#C2410C;strokeWidth=3;fontColor=#9A3412;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="350" y="430" width="230" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="dead" value="3B  재시도 초과
+DEAD · 자동 relay 중지" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2F2;strokeColor=#B42318;strokeWidth=3;fontColor=#8E1C13;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="660" y="430" width="250" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="consumer" value="4  Consumer
+좌석 반환" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#2457D6;strokeWidth=3;fontColor=#163B78;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="660" y="190" width="230" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="dlt" value="5  consumer 실패
+DLT 격리" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2F2;strokeColor=#B42318;strokeWidth=3;fontColor=#8E1C13;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="970" y="190" width="230" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="replay" value="6  관리자 replay
+좌석은 한 번만 반환" vertex="1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF3;strokeColor=#18794E;strokeWidth=3;fontColor=#125C3B;fontSize=27;fontStyle=1;align=center;verticalAlign=middle;spacing=16;arcSize=14;">
+          <mxGeometry x="1280" y="190" width="250" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="commit" target="relay" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="relay" target="consumer" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="relay" target="failed" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="failed" target="dead" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="consumer" target="dlt" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="dlt" target="replay" style="edgeStyle=orthogonalEdgeStyle;html=0;endArrow=open;startArrow=none;rounded=0;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

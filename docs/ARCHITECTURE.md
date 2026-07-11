@@ -1,45 +1,84 @@
-# Architecture
+# Concert Booking Architecture
 
-Concert Booking의 전체 구조는 대기열 입장 제어, 예매 트랜잭션, 결제/만료 상태 전이, Outbox 기반 비동기 이벤트, 실패 재처리 경계를 분리합니다.
+이 문서는 전체 기술 스택을 한 장에 나열하지 않습니다. 실제 예약 흐름에서 서로 다른 두 질문만 분리해
+설명합니다.
 
-![Concert Booking 전체 아키텍처](assets/architecture/overall-architecture.svg)
+1. 같은 좌석을 놓친 사용자는 어떻게 예매를 계속하는가?
+2. commit 뒤 좌석 반환 이벤트가 실패하면 어떻게 다시 처리하는가?
 
-이 다이어그램은 구현된 핵심 흐름과 검증 대상 경계를 설명하기 위한 단순화된 구조도이며, 운영 배포 토폴로지나 production SLO를 주장하지 않습니다.
+## 1. 좌석 경쟁과 사용자 복구
 
-## 핵심 흐름
+| 단계 | 사용자·클라이언트 | 애플리케이션 경계 | 기준 데이터 |
+| --- | --- | --- | --- |
+| 1. 대기 | 사용자가 공연 일정의 대기열에 진입 | Redis Sorted Set에서 순번과 상태 계산 | Redis Queue |
+| 2. 입장 | <code>READY</code> 뒤 토큰 요청 | Lua로 기존 토큰 확인·순위 검증·저장·queue 제거 | Redis Token |
+| 3. 좌석 선택 | 최신 좌석표에서 좌석 선택 | schedule과 seat 소속을 검증 | PostgreSQL Seat |
+| 4. 예약 경쟁 | Queue Token과 idempotency key로 예약 | 좌석 상태를 잠그고 한 요청만 <code>HELD</code>로 전이 | PostgreSQL |
+| 5. 패자 복구 | 충돌 뒤 좌석표를 다시 조회 | 실패한 예약의 Queue Token은 소비하지 않음 | Redis Token + DB |
+| 6. 결제·종료 | 데모 결제, 취소 또는 만료 | reservation row lock과 상태 전이 guard | PostgreSQL |
 
-| 흐름 | 기준 데이터 | 설명 |
+핵심은 "한 명만 성공"에서 끝나지 않는다는 점입니다. 경쟁에서 실패한 요청은 토큰을 잃지 않으므로 같은
+사용자가 최신 좌석표에서 다른 좌석을 고를 수 있습니다.
+
+### Queue Token 응답 유실
+
+토큰 발급은 다음 연산을 Redis Lua 한 번으로 실행합니다.
+
+1. 같은 사용자·공연 일정에 이미 발급된 토큰이 있는지 확인합니다.
+2. 사용자가 입장 가능한 순위인지 검증합니다.
+3. 만료 시각이 있는 토큰을 저장합니다.
+4. 사용자를 queue에서 제거합니다.
+
+HTTP 응답이 유실된 뒤 다시 요청하면 새 토큰을 계속 만들지 않고 기존 유효 토큰을 돌려줍니다.
+토큰이 만료된 경우에는 <code>EXPIRED</code>를 표시하고 명시적으로 다시 대기열에 들어갑니다.
+
+### Idempotency 경계
+
+| 요청 | 같은 key + 같은 payload | 같은 key + 다른 payload | 오래 멈춘 PROCESSING |
+| --- | --- | --- | --- |
+| 예약 | 기존 예약 응답 | 409 conflict | stale claim 회수 후 재처리 |
+| 결제 | 기존 결제 응답 | 409 conflict | stale claim 회수 후 재처리 |
+
+DB unique constraint가 최종 중복 방어선이며, application service는 replay와 conflict를 구분합니다.
+
+## 2. 취소·만료와 이벤트 복구
+
+취소와 만료 transaction은 예약 상태와 Outbox event를 함께 commit합니다. 좌석 반환은 event consumer가
+담당하므로, 동기 상태 전이와 비동기 전달 실패를 별도로 관찰할 수 있습니다.
+
+| 단계 | 정상 경로 | 실패 경계 |
 | --- | --- | --- |
-| 입장 제어 | Redis Queue / Token | 사용자는 Queue API를 통해 대기열에 진입하고, `userId + scheduleId`에 바인딩된 입장 토큰을 받은 뒤 예매 API로 진입합니다. |
-| 예매 트랜잭션 | PostgreSQL | Reservation API는 Queue Token을 확인하고 Reservation Tx 안에서 좌석 HOLD, 예약 생성, Outbox Table 기록을 처리합니다. 최종 정합성 기준은 DB입니다. |
-| 결제/만료 | PostgreSQL | Payment API와 Expiration Scheduler는 reservation row lock과 상태 전이 규칙으로 `PENDING -> CONFIRMED/CANCELLED/EXPIRED` 경계를 보호합니다. |
-| 비동기 이벤트 | Outbox Table / Kafka Topic | 비즈니스 트랜잭션은 Outbox Table에 이벤트 발행 의도를 남기고, Outbox Relay가 Kafka Topic으로 발행합니다. |
-| 실패 처리 | DLT / Admin Replay API / Reconciliation Job | Consumer 실패는 DLT로 격리하고, 제한된 관리자 replay와 Redis stock reconciliation으로 수동 검산/보정 경로를 둡니다. |
+| 1. 상태 전이 | <code>PENDING → CANCELLED/EXPIRED</code> | 결제와 동시에 실행되면 row lock 뒤 하나만 성공 |
+| 2. Outbox 저장 | 같은 transaction에 반환 이벤트 저장 | transaction rollback이면 event도 없음 |
+| 3. Relay | publish 성공 뒤 <code>PUBLISHED</code> | 실패하면 <code>FAILED</code>와 다음 시각 기록 |
+| 4. 재시도 | backoff 뒤 다시 publish | 최대 횟수 초과 시 <code>DEAD</code>로 격리 |
+| 5. Consumer | <code>HELD</code> 좌석과 재고 반환 | 처리 실패 메시지는 DLT로 이동 |
+| 6. Manual replay | 원인을 확인한 이벤트만 제한적으로 재발행 | 이미 처리된 이벤트는 idempotency로 흡수 |
 
-## 설계 판단
+Outbox는 exactly-once를 만들지 않습니다. 전달은 중복될 수 있고, consumer가 같은 좌석을 두 번 반환하지
+않도록 설계합니다.
 
-| 판단 | 이유 | 현재 검증 경계 |
+## 데이터별 진실 소스
+
+| 데이터 | 빠른 보조 상태 | 최종 판단 |
 | --- | --- | --- |
-| DB를 좌석 정합성의 최종 기준으로 둠 | Redis stock은 빠른 선검증용 캐시라서 불일치 가능성을 별도로 다룹니다. | Testcontainers와 k6 로컬 시나리오 검증 |
-| Queue Token을 Reservation Tx 앞단에서 검증 | 대기열 우회와 다른 사용자/다른 공연 일정 token 재사용을 차단합니다. | `QueueTokenPolicyIntegrationTest`, Scenario F 시나리오 검증 |
-| Outbox로 Kafka publish 경계를 분리 | DB commit 이후 이벤트 발행 실패가 조용히 사라지는 구간을 줄입니다. | `OutboxIntegrationTest`, `KafkaDltReplayIntegrationTest` |
-| DLT replay와 reconciliation을 수동 utility로 제한 | 자동 복구 시스템이나 운영 SLO를 주장하지 않고, 포트폴리오 검증용 실패 대응 경계를 명확히 둡니다. | `ROLE_ADMIN` 보호와 local 검증 |
+| 대기 순번·입장 토큰 | Redis | Redis TTL과 token binding |
+| 좌석 상태 | Redis stock pre-check | PostgreSQL <code>Seat.status</code> |
+| 예약·결제 상태 | 없음 | PostgreSQL reservation/payment |
+| 이벤트 발행 의도 | scheduler memory가 아님 | PostgreSQL outbox row |
+| consumer 실패 | application log만이 아님 | Kafka DLT record |
 
-## 주요 컴포넌트
+Redis stock이 DB와 다르면 DB의 available seat count를 기준으로 수동 reconciliation합니다. Redis 값을
+근거로 DB 좌석 상태를 덮어쓰지 않습니다.
 
-| 컴포넌트 | 역할 |
-| --- | --- |
-| Client | Queue, Reservation, Payment, Admin API 호출자입니다. |
-| Queue API | 대기열 진입, 순번 조회, 입장 토큰 발급을 담당합니다. |
-| Reservation API | 입장 토큰과 idempotency key를 확인하고 예매 생성을 시작합니다. |
-| Payment API | 결제 idempotency와 reservation 상태 전이를 처리합니다. |
-| Expiration Scheduler | 만료된 PENDING reservation을 별도 트랜잭션으로 만료 처리합니다. |
-| Reservation Tx | 좌석 HOLD, 예약 생성, 상태 전이, Outbox 기록의 트랜잭션 경계입니다. |
-| PostgreSQL | 좌석/예약/결제/Outbox의 최종 기준 데이터 저장소입니다. |
-| Redis Queue / Token / Stock | 대기열, 입장 토큰, 재고 선검증 캐시를 담당합니다. |
-| Outbox Relay | publish 가능한 Outbox event를 Kafka로 발행하고 실패 시 retry/dead 상태를 기록합니다. |
-| Kafka Topic | reservation event를 consumer로 전달합니다. |
-| Consumer | 취소/만료 이벤트를 받아 좌석 반환을 멱등 처리합니다. |
-| DLT | consumer 처리 실패 메시지를 격리합니다. |
-| Admin Replay API | DLT 메시지를 관리자 권한으로 제한적으로 재처리합니다. |
-| Reconciliation Job | DB 기준 좌석 수와 Redis stock 불일치를 검산하고 필요 시 수동 보정합니다. |
+## 검증 연결
+
+- [두 브라우저의 좌석 경쟁·패자 복구](../web/e2e/booking.spec.ts)
+- [Queue Token 정책](../src/test/java/com/concert/booking/integration/QueueTokenPolicyIntegrationTest.java)
+- [예약 idempotency](../src/test/java/com/concert/booking/integration/ReservationIdempotencyIntegrationTest.java)
+- [결제·취소·만료 race](../src/test/java/com/concert/booking/integration/ReservationStateTransitionRaceIntegrationTest.java)
+- [Outbox relay 상태](../src/test/java/com/concert/booking/integration/OutboxIntegrationTest.java)
+- [DLT replay와 좌석 반환](../src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java)
+
+성능 측정과 운영 절차는 각각 [PERF_RESULT.md](PERF_RESULT.md), [RUNBOOK.md](RUNBOOK.md)에 분리합니다.
+이 문서는 운영 topology, TPS, capacity, SLO를 주장하지 않습니다.

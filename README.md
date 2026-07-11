@@ -1,565 +1,219 @@
 # Concert Booking
 
-![CI](https://github.com/sjh9714/concert-booking/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/sjh9714/concert-booking/actions/workflows/ci.yml/badge.svg)](https://github.com/sjh9714/concert-booking/actions/workflows/ci.yml)
 
-고동시성 콘서트 예매 상황에서 **동일 좌석 경합, 대기열 입장 제어, 중복 요청, 결제/만료 race,
-Outbox/Kafka 이벤트 발행 실패**를 다루는 Spring Boot 백엔드 프로젝트입니다.
+같은 좌석을 놓친 사용자가 오류 화면에 갇히지 않고, 최신 좌석표를 받아 예매를 계속할 수 있도록 만든
+Spring Boot + React 예약 프로젝트입니다.
 
-이제 저장소에는 같은 계약을 실제로 사용하는 React 제품 클라이언트도 포함됩니다. 공연 탐색부터
-대기열, 좌석 선택, 예매, 명시적인 데모 결제, 내 예매 확인까지 하나의 수직 흐름으로 실행할 수 있습니다.
+![실제 Concert Booking React 클라이언트의 좌석 선택 화면](https://raw.githubusercontent.com/sjh9714/new-portfolio/b6ae69b5fec5518c5db1a6a10d1ac304a217173b/public/work/concert-seat-selection.webp)
 
-### 제품 데모 실행
+> 위 이미지는 이 저장소의 <code>web/</code> 클라이언트를 실제 E2E 환경에서 실행해 캡처한 화면입니다.
+> 가상의 서비스 화면이나 운영 트래픽 수치를 사용하지 않습니다.
 
-```bash
-cp .env.example .env
-# .env의 DB_PASSWORD와 JWT_SECRET을 로컬 전용 임의 값으로 교체
-docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build --wait web
-```
+## 이 저장소에서 확인할 것
 
-브라우저에서 `http://localhost:4173`을 엽니다. 종료할 때는 아래 명령을 실행합니다.
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.demo.yml down
-```
-
-실제 카드 정보는 받지 않으며 결제 버튼은 포트폴리오용 즉시 완료 데모입니다.
-
-Compose 역할은 명시적으로 나뉩니다.
-
-| 구성 | 목적 | Spring profile | 데모 UI |
-| --- | --- | --- | --- |
-| `docker-compose.yml` | 공통 인프라와 비시드 애플리케이션 기반 | `default` | 비활성 |
-| `docker-compose.demo.yml` | 사람이 직접 둘러보는 제품 데모 | `demo` | 활성 |
-| `docker-compose.e2e.yml` | Playwright 전용 fixture와 테스트 endpoint | `e2e` | 활성 |
-
-`demo`와 `e2e` 구성은 반드시 기본 파일 뒤에 오버레이로 지정합니다. `e2e` profile의
-load-test utility는 제품 데모에 노출되지 않습니다.
-
-이 프로젝트는 단순한 예매 CRUD가 아니라, 실제 예매 시스템에서 쉽게 깨지는 **좌석 정합성, 락 전략,
-멱등성, 이벤트 처리, Redis stock 불일치** 문제를 코드와 테스트로 검증하는 데 초점을 둡니다.
-
----
-
-## 30초 요약
-
-이 저장소가 증명하는 것은 **고동시성 예매 도메인에서 좌석 overselling, 대기열 token 우회, 중복 요청,
-결제/만료 race, 이벤트 발행 실패를 어떻게 방어했는지**입니다.
-
-가장 강한 근거는 다음 세 가지입니다.
-
-| 근거 | 확인한 내용 | 범위 |
-| --- | --- | --- |
-| k6 측정 | 동일 좌석 100 concurrent requests에서 success 1, fail 99, overselling 0 | 로컬 Docker 단일 실행 |
-| k6 측정 | 50명/50좌석 분산 예매에서 비관적 50/50, 낙관적 20/50, Redis 분산 락 50/50 | 로컬 Docker 단일 실행 |
-| Testcontainers + 제한된 k6 검증 | 결제/만료 race, idempotency replay/conflict, 대기열 토큰 우회 차단 정책 | 시나리오 검증 |
-
-이 저장소가 주장하지 않는 것도 명확히 분리합니다.
-
-| 주장하지 않음 | 이유 |
+| 질문 | 구현으로 답한 내용 |
 | --- | --- |
-| 운영 환경 TPS, SLO, capacity | 모든 성능 수치는 로컬 Docker 기준입니다. |
-| 평균/표준편차/신뢰구간 | A/B/C는 단일 실행 결과입니다. |
-| production-grade observability | metric contract와 local Prometheus artifact만 있습니다. |
-| 자동 장애 복구 시스템 | DLT replay와 Redis stock reconciliation은 관리자 수동 utility입니다. |
+| 두 사용자가 같은 좌석을 누르면 어떻게 되는가? | 한 명만 예약하고, 패자는 최신 좌석표에서 다른 좌석을 선택할 수 있습니다. |
+| 응답을 받지 못해 같은 요청을 다시 보내면 어떻게 되는가? | Queue Token과 idempotency key를 다시 사용해도 예약은 한 건으로 수렴합니다. |
+| 결제하지 않은 좌석은 언제 돌아오는가? | 취소·만료 상태 전이와 좌석 반환 이벤트를 분리하고, 반환은 멱등 처리합니다. |
+| Kafka 발행이나 consumer 처리가 실패하면 어떻게 되는가? | Outbox retry/DEAD와 DLT manual replay 경계를 별도 사례로 검증합니다. |
 
----
+## 프로젝트가 바뀐 과정
 
-## 전체 아키텍처
-
-![Concert Booking 전체 아키텍처](docs/assets/architecture/overall-architecture.svg)
-
-이 다이어그램은 구현된 핵심 흐름과 검증 대상 경계를 설명하기 위한 단순화된 구조도이며, 운영 배포 토폴로지나 production SLO를 주장하지 않습니다.
-
-| 핵심 설계 판단 | 이유 | 경계 |
+| 시기 | 출발점 | 다음 단계로 넘어간 이유 |
 | --- | --- | --- |
-| Queue Token을 Reservation Tx 앞단에서 검증 | 대기열 우회와 다른 사용자/다른 공연 일정 token 재사용을 막기 위해 | 시나리오 검증 |
-| DB를 좌석 정합성의 최종 기준으로 유지 | Redis Queue/Token/Stock은 빠른 입장 제어와 선검증 캐시이며 불일치 가능성이 있음 | Testcontainers/k6 로컬 검증 |
-| Outbox Table을 비즈니스 트랜잭션 안에 기록 | DB commit 이후 Kafka publish 실패로 이벤트가 사라지는 구간을 줄이기 위해 | Testcontainers 검증 |
-| DLT, Admin Replay API, Reconciliation Job을 수동 경계로 분리 | 자동 복구 시스템이나 production SLO를 주장하지 않고 실패 대응 흐름을 제한하기 위해 | 로컬 검증 utility |
+| 2026년 2월 | 같은 좌석에 대한 동시 요청과 락 전략을 실험 | 서버가 한 명만 성공시키는 것만으로는 사용자 경험을 설명할 수 없었습니다. |
+| 2026년 5월 | Queue Token, idempotency, Outbox, DLT, 상태 전이 보강 | 실패를 감지하는 데서 끝내지 않고 재시도·격리·복구 경계를 코드로 남겼습니다. |
+| 2026년 7월 | React 클라이언트와 Playwright E2E 연결 | 대기열부터 결제·취소까지 실제 화면에서 이어지는지 다시 확인했습니다. |
 
-상세 설명은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
-README와 상세 문서는 새로 작성한 `overall-architecture.svg`를 단일 구조도 원본으로 사용합니다.
+## 사용자가 지나가는 흐름
 
----
+1. 공연을 찾고 로그인합니다.
+2. 대기열에 들어가 <code>READY</code>가 되면 입장 토큰을 받습니다.
+3. 키보드로 좌석을 고르고 예약합니다.
+4. 예약 만료 시각을 확인하고 데모 결제를 완료합니다.
+5. 내 예약에서 공연·일정·좌석·결제 상태를 확인하거나 취소합니다.
 
-## 핵심 문제
+결제 화면은 실제 PG처럼 보이는 카드 입력을 받지 않습니다. 예약 상태 전이와 중복 요청 방어에 필요한
+**데모 결제**만 제공합니다.
 
-| 문제 | 구현한 대응 |
-| --- | --- |
-| 같은 좌석을 동시에 잡아도 overselling이 나면 안 됨 | 비관적/낙관적/Redis 분산 락 전략을 같은 API 계약에서 비교하고 테스트 |
-| 대기열을 거치지 않고 예매 API로 바로 들어오면 안 됨 | Redis Sorted Set 대기열과 `userId + scheduleId` 바인딩 입장 토큰 |
-| 더블클릭, timeout, 재시도가 중복 예매/결제로 이어지면 안 됨 | `Idempotency-Key`와 DB unique constraint로 replay/conflict 분리 |
-| 결제, 취소, 만료가 동시에 실행되어 상태가 꼬이면 안 됨 | reservation row lock과 도메인 상태 전이 메서드 |
-| DB commit 후 Kafka publish나 consumer 처리 실패가 사라지면 안 됨 | Outbox retry/backoff/DEAD, Spring Kafka DLT, 관리자 manual replay utility |
+## 전환점: 정합성만 맞아서는 제품 흐름이 아니었다
 
----
+처음에는 “같은 좌석을 동시에 요청하면 한 명만 성공하는가?”만 확인했습니다. React 화면을 붙여보니
+서버가 정답을 내는 것만으로는 부족했습니다.
 
-## 아키텍처 요약
+- 패자가 충돌 메시지만 보고 멈추면 다시 공연 목록부터 들어가야 했습니다.
+- Queue Token 응답이 유실되면 서버에 토큰이 있어도 화면은 입장할 방법을 잃었습니다.
+- 취소·만료 뒤 좌석이 돌아오는 시점이 화면의 최신 좌석 상태와 맞아야 했습니다.
 
-```mermaid
-flowchart LR
-    Client["Client"] --> API["REST API + SSE"]
-    API --> App["Spring Boot"]
-    App --> DB["PostgreSQL"]
-    App --> Redis["Redis<br/>Queue, Token, Hold, Stock, Lock"]
-    App --> Outbox["outbox_events"]
-    Outbox --> Relay["Outbox Relay Scheduler"]
-    Relay --> Kafka["Kafka Topics"]
-    Kafka --> Consumer["SeatReleaseConsumer"]
-    Consumer --> DB
-    Consumer --> Redis
-    App --> Scheduler["Expiration Scheduler + ShedLock"]
-    Tests["Testcontainers / k6"] --> App
-```
+그래서 성공한 요청의 수보다 **실패한 사용자가 어디서 다시 이어가는지**를 제품 계약에 포함했습니다.
 
-주요 예매 흐름:
+## 1. 좌석 경쟁 뒤 복구
 
-```text
-queue enter
-→ queue token issue
-→ POST /api/reservations
-  - queueToken body
-  - Idempotency-Key header
-→ seat HELD + reservation PENDING
-→ POST /api/payments
-  - Idempotency-Key header
-  - mock payment
-→ reservation CONFIRMED + seat RESERVED
-→ outbox event 저장
-→ relay가 Kafka publish
-```
+![동일 좌석 경쟁에서 패자가 최신 좌석표로 복구하는 6단계 흐름](docs/assets/architecture/seat-loser-recovery.png)
 
-취소와 만료는 상태 전이 트랜잭션에서 좌석을 직접 반환하지 않습니다.
-상태 전이는 outbox event만 남기고, 좌석 반환은 `reservation.cancelled` 이벤트를 받은 consumer가
-`HELD` 좌석에 대해서만 멱등적으로 수행합니다.
+편집 원본: [seat-loser-recovery.drawio](docs/assets/architecture/seat-loser-recovery.drawio)
 
----
+그림 transcript:
 
-## 주요 설계 결정
+1. 두 브라우저가 VIP 1열 5번을 선택합니다.
+2. 각 사용자는 자신의 Queue Token과 idempotency key로 예약을 요청합니다.
+3. DB 좌석 상태를 기준으로 한 요청만 <code>HELD</code>가 됩니다.
+4. 승자는 예약 상세로 이동합니다.
+5. 패자는 Queue Token을 잃지 않고 최신 좌석표를 다시 받습니다.
+6. 패자는 다른 좌석을 골라 예매를 계속합니다.
 
-| 결정 | 이유 |
-| --- | --- |
-| Redis Sorted Set 대기열 | 진입 시각을 score로 저장하고 `ZRANK`로 순번 계산 |
-| 입장 토큰을 `userId + scheduleId`에 바인딩 | 다른 사용자나 다른 공연 일정의 token 재사용 방지 |
-| 예매 성공 후에만 token 소비 | 좌석 경합 실패 시 사용자가 다른 좌석으로 재시도할 수 있도록 유지 |
-| 세 가지 reservation strategy 유지 | 같은 API 계약에서 비관적/낙관적/분산 락의 차이 비교 |
-| Redis stock pre-check | 소진 이후 실패 요청이 DB transaction까지 진입하는 비용 감소 |
-| DB final consistency | Redis stock은 캐시이며, 최종 기준은 DB `Seat.status = AVAILABLE` count |
-| schedule-bound seat query | 요청 schedule에 속하지 않는 좌석 예매 방지 |
-| `Idempotency-Key` | 중복 예매, 중복 결제, timeout 이후 재시도 방어 |
-| Outbox Pattern | DB commit 이후 Kafka publish 실패로 이벤트가 사라지는 구간 완화 |
-| Outbox retry/backoff/DEAD | 실패 이벤트를 무한 재시도하지 않고 운영적으로 격리 |
-| DLT manual replay | Consumer 실패 메시지를 격리하고 관리자 수동 재처리 경로 제공 |
-| Flyway migrations | `schema.sql` init 대신 versioned SQL migration으로 schema 관리 |
-| Local observability metrics | 예매 실패 사유, queue token abuse, outbox backlog, stock mismatch를 로컬 검증용으로 관측 |
-
----
-
-## 검증한 항목
-
-### k6 Measured
-
-| 시나리오 | 조건 | 결과 |
+| 단계 | 서버 판단 | 화면의 다음 행동 |
 | --- | --- | --- |
-| 동일 좌석 경합 | 동일 좌석 100 concurrent requests | success 1, fail 99, overselling 0 |
-| 분산 좌석 예약 | 50명이 서로 다른 좌석 예매 | 비관적 50/50, 낙관적 20/50, Redis 분산 락 50/50 |
-| 혼합 부하 테스트 | k6 200 VU, 70% 조회 + 30% 예매, 45초 | 총 RPS: 비관적 969, 낙관적 993, Redis 분산 락 1,005 |
+| 두 브라우저가 같은 좌석을 선택 | DB 좌석 상태를 최종 기준으로 한 요청만 성공 | 승자는 예약 상세로 이동 |
+| 두 번째 요청이 충돌 | 실패한 예약에서는 Queue Token을 소비하지 않음 | 패자는 최신 좌석표를 다시 받음 |
+| 패자가 다른 좌석을 선택 | 남아 있는 토큰과 새 idempotency key로 재요청 | 예매 흐름을 중단하지 않고 계속 진행 |
 
-> k6 결과는 로컬 Docker 단일 실행 기준입니다. 실제 운영 환경 수치가 아니며,
-> 평균/표준편차/신뢰구간을 주장하지 않습니다.
+브라우저 회귀 테스트는 두 독립 context가 같은 좌석을 요청하고, 승자 한 명과 복구 가능한 패자 한 명으로
+끝나는지를 확인합니다.
 
-상세 수치와 한계는 [docs/PERF_RESULT.md](docs/PERF_RESULT.md)에 정리했습니다.
-결제와 만료 동시 실행 검증, 중복 요청 replay/conflict 검증,
-대기열 토큰 우회 차단 검증은 짧은 smoke 실행, 비관적 락 단일 재현 실행,
-세 가지 락 전략의 로컬 3회 반복 실행으로 정책 분기와 실패 조건을 다시 확인했습니다.
-이 결과는 정합성 시나리오 검증 근거이며, 운영 성능 claim으로 사용하지 않습니다.
+근거:
 
-### Testcontainers Verified
+- [두 브라우저 좌석 경쟁 E2E](web/e2e/booking.spec.ts)
+- [동일 좌석 동시 요청 통합 테스트](src/test/java/com/concert/booking/integration/ConcurrencyIntegrationTest.java)
+- [Queue Token 성공 후 소비·실패 후 보존](src/test/java/com/concert/booking/integration/QueueTokenPolicyIntegrationTest.java)
 
-| 검증 항목 | 대표 테스트 |
-| --- | --- |
-| 동일 좌석 오버셀링 방지 | `ConcurrencyIntegrationTest`, `DistributedLockConcurrencyTest`, `OptimisticLockConcurrencyTest` |
-| 예약/결제 조회 소유권 | `AccessControlIntegrationTest` |
-| 입장 토큰 필수 검증, 성공 후 소비, 실패 시 보존 | `QueueTokenPolicyIntegrationTest` |
-| 요청 schedule과 seatIds 소속 검증 | `SeatScheduleValidationIntegrationTest` |
-| 예매 idempotency와 DB unique constraint | `ReservationIdempotencyIntegrationTest` |
-| 결제 idempotency와 중복 결제 차단 | `PaymentIdempotencyIntegrationTest` |
-| 결제/취소/만료 race | `ReservationStateTransitionRaceIntegrationTest` |
-| 좌석 반환 멱등성 | `SeatReleaseIdempotencyIntegrationTest` |
-| Outbox 저장, relay 성공, 실패 재시도 | `OutboxIntegrationTest` |
-| Kafka DLT와 replay | `KafkaDltReplayIntegrationTest` |
-| Redis stock reconciliation | `StockReconciliationIntegrationTest` |
-| 일반 admin endpoint의 `ROLE_ADMIN` 보호 | `AdminSecurityIntegrationTest` |
-| 분산 락 실패 경로의 stock 복원 | `DistributedLockStockFailureIntegrationTest` |
-| scheduler와 ShedLock 설정 로드 | `SchedulerConfigIntegrationTest` |
-| k6 fixture reset endpoint | `LoadTestAdminControllerIntegrationTest` |
+## 2. 응답 유실과 중복 요청
 
----
+Queue Token 발급은 Redis Lua 한 번으로 기존 토큰 확인, 순위 검증, 토큰 저장, queue 제거를 처리합니다.
+발급 응답이 사라져 사용자가 다시 요청해도 같은 유효 토큰을 돌려줍니다.
 
-## 락 전략 비교
+예약과 결제는 <code>Idempotency-Key</code>를 사용합니다.
 
-| 전략 | 직렬화 지점 | 장점 | 한계 |
-| --- | --- | --- | --- |
-| Pessimistic Lock | DB `SELECT ... FOR UPDATE` | 높은 경합에서 결과가 직관적 | lock wait와 DB connection 점유 |
-| Optimistic Lock | JPA `@Version` + retry | 낮은 경합에서 lock wait가 적음 | 공유 row version 충돌 시 성공률 하락 |
-| Redis Distributed Lock | Redis stock + MultiLock | 소진 후 실패를 DB 전에 차단 | Redis/DB reconciliation 필요 |
+- 같은 key와 같은 요청은 기존 결과를 돌려줍니다.
+- 같은 key로 다른 좌석을 요청하면 409로 거부합니다.
+- 오래 멈춘 <code>PROCESSING</code> claim은 회수한 뒤 다시 처리할 수 있습니다.
+- 동시 중복 요청도 DB unique constraint와 application service에서 한 건으로 수렴합니다.
 
-Scenario B에서 낙관적 락은 각 사용자가 서로 다른 좌석을 예매해도 같은
-`ConcertSchedule.availableSeats` row를 갱신하기 때문에 version 충돌이 발생했습니다.
-이 결과는 낙관적 락이 항상 부적합하다는 뜻이 아니라,
-**공유 카운터 row가 있는 모델에서는 충돌 비용이 쉽게 드러난다**는 것을 보여줍니다.
+근거:
 
----
+- [Queue 응답 유실·예약 중복 E2E](web/e2e/booking.spec.ts)
+- [Queue 발급 멱등성 통합 테스트](src/test/java/com/concert/booking/integration/QueueServiceTest.java)
+- [예약 idempotency 통합 테스트](src/test/java/com/concert/booking/integration/ReservationIdempotencyIntegrationTest.java)
+- [결제 idempotency 통합 테스트](src/test/java/com/concert/booking/integration/PaymentIdempotencyIntegrationTest.java)
 
-## Outbox / Kafka / DLT
+## 3. 취소·만료 뒤 좌석 반환
 
-Outbox는 DB commit 이후 Kafka publish 실패로 이벤트가 사라지는 구간을 줄이기 위한 장치입니다.
+결제, 취소, 만료는 같은 reservation row를 잠그고 도메인 상태 전이를 통과합니다. 취소와 만료 transaction은
+좌석을 직접 여러 번 바꾸지 않고 Outbox에 반환 의도를 남깁니다.
 
-```text
-business transaction
-→ INSERT outbox_events(status=PENDING)
-→ commit
-→ relay scheduler
-→ Kafka publish
-→ success: PUBLISHED
-→ failure: FAILED + nextAttemptAt
-→ max retry exceeded: DEAD
-```
+<code>reservation.cancelled</code> 또는 만료 이벤트를 받은 consumer는 <code>HELD</code> 좌석만 반환합니다.
+같은 이벤트를 다시 받아도 좌석과 재고는 한 번만 복구됩니다.
 
-Outbox는 exactly-once를 보장하지 않습니다.
-중복 발행 가능성은 consumer 멱등성으로 흡수합니다.
+근거:
 
-상태 전이는 운영 판단 기준으로도 분리합니다.
+- [취소·만료 좌석 반환 E2E](web/e2e/booking.spec.ts)
+- [결제·취소·만료 race 통합 테스트](src/test/java/com/concert/booking/integration/ReservationStateTransitionRaceIntegrationTest.java)
+- [좌석 반환 멱등성 통합 테스트](src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java)
 
-| 상태 | 의미 | 운영 조치 |
+## 별도 사례: Outbox와 DLT 복구
+
+좌석 경쟁은 동기 요청의 정합성 문제이고, Outbox/DLT는 commit 뒤 비동기 전달 실패 문제입니다. 두 사례를
+하나의 “락 성능” 이야기로 섞지 않습니다.
+
+![Outbox publish 실패와 consumer DLT 복구를 분리한 6단계 흐름](docs/assets/architecture/event-recovery-boundaries.png)
+
+편집 원본: [event-recovery-boundaries.drawio](docs/assets/architecture/event-recovery-boundaries.drawio)
+
+그림 transcript:
+
+1. 취소·만료 transaction이 예약 상태와 Outbox <code>PENDING</code>을 함께 commit합니다.
+2. Outbox Relay가 Kafka publish를 시도합니다.
+3. publish가 실패하면 <code>FAILED</code>와 backoff를 기록하고, 재시도를 초과하면
+   <code>DEAD</code>에서 멈춥니다.
+4. publish에 성공한 이벤트는 consumer가 좌석 반환을 처리합니다.
+5. consumer 처리가 실패한 메시지는 DLT로 격리합니다.
+6. 관리자가 원인을 확인한 뒤 replay해도 좌석은 한 번만 반환됩니다.
+
+<code>DEAD</code>는 relay 실패 경계이고 DLT는 consumer 실패 경계입니다. 그림의 두 실패 경로를 하나의
+직선적인 상태 전이로 해석하지 않습니다.
+
+| 경계 | 실패했을 때 | 복구 방식 |
 | --- | --- | --- |
-| `PENDING` | DB transaction에 이벤트 발행 의도만 기록됨 | relay 대상 여부 확인 |
-| `PUBLISHED` | Kafka publish 성공 | consumer 처리 결과와 DLT 확인 |
-| `FAILED` | publish 실패 후 재시도 대기 | broker 상태와 `nextAttemptAt` 확인 |
-| `DEAD` | 재시도 초과로 자동 relay 제외 | payload/idempotency 확인 후 제한된 manual replay |
+| 비즈니스 transaction | rollback | Outbox event도 저장되지 않음 |
+| Outbox relay → Kafka | publish 실패 | <code>FAILED</code>와 <code>nextAttemptAt</code>을 남기고 재시도 |
+| 최대 relay 재시도 초과 | 계속 publish 실패 | <code>DEAD</code>로 격리하고 자동 relay에서 제외 |
+| Kafka consumer | 좌석 반환 처리 실패 | DLT로 격리한 뒤 관리자 권한으로 제한된 건수만 manual replay |
+| 같은 이벤트 재전달 | 이미 반환된 좌석 | consumer idempotency로 중복 반환 방지 |
 
-DLT replay는 자동 복구 시스템이 아닙니다.
-`ROLE_ADMIN` 권한으로 `/api/admin/dlt/replay`를 호출하는 **manual replay utility**입니다.
+근거:
 
----
+- [Outbox 저장·retry·DEAD 통합 테스트](src/test/java/com/concert/booking/integration/OutboxIntegrationTest.java)
+- [DLT 격리·manual replay 통합 테스트](src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java)
+- [상세 실패 경계](docs/ARCHITECTURE.md)
 
-## Redis stock reconciliation
+Outbox는 exactly-once를 보장하지 않습니다. 중복 전달을 전제로 consumer가 같은 결과로 수렴하게 만들었습니다.
 
-Redis stock은 빠른 선검증용 캐시입니다. 최종 기준 데이터는 DB입니다.
+## 재현
 
-```text
-DB Seat.status AVAILABLE count
-→ StockReconciliationService
-→ ConcertSchedule.availableSeats 비교
-→ Redis stock 비교
-→ dry-run mismatch report
-→ repair=true 시 DB 기준으로 보정
-```
+### 제품 데모
 
-Reconciliation endpoint:
-
-```text
-POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=false
-POST /api/admin/schedules/{scheduleId}/stock/reconcile?repair=true
-```
-
-`repair=true`는 관리자 권한으로 수동 실행하는 보정 경로입니다.
-Redis를 단일 진실 공급원으로 만들지 않습니다.
-
----
-
-## Observability
-
-Spring Boot Actuator와 Micrometer를 사용해 로컬 검증용 운영 지표를 노출합니다.
-
-| Endpoint | 접근 정책 |
-| --- | --- |
-| `/actuator/health` | 인증 없이 조회 가능 |
-| `/actuator/info` | 인증 없이 조회 가능 |
-| `/actuator/metrics` | `ROLE_ADMIN` 필요 |
-| `/actuator/prometheus` | `ROLE_ADMIN` 필요 |
-
-대표 metric:
-
-- 예매:
-  `concert.booking.reservation.attempts`,
-  `concert.booking.reservation.success`,
-  `concert.booking.reservation.failures`,
-  `concert.booking.reservation.latency`
-- 대기열 token:
-  `concert.booking.queue.token.issued`,
-  `concert.booking.queue.token.validation.failures`,
-  `concert.booking.queue.token.inflight.conflicts`
-- Outbox relay:
-  `concert.booking.outbox.published`,
-  `concert.booking.outbox.failed`,
-  `concert.booking.outbox.dead`,
-  `concert.booking.outbox.publish.latency`,
-  `concert.booking.outbox.events`
-- Stock reconciliation:
-  `concert.booking.stock.reconciliation.runs`,
-  `concert.booking.stock.reconciliation.mismatches`,
-  `concert.booking.stock.reconciliation.repairs`
-
-Outbox gauge는 scrape마다 DB를 조회하지 않고, 주기적으로 갱신한 pending/failed/dead count를 노출합니다.
-`PrometheusScrapeContractIntegrationTest`는 `monitoring/alert-rules.yml`과 Grafana dashboard가 참조하는
-Prometheus metric name이 보호된 `/actuator/prometheus` 응답에 노출되는지 검증합니다.
-
-> 이 섹션은 기본적인 관측 지표를 설명합니다. `monitoring/` 템플릿은 Prometheus/Grafana 문법과 synthetic
-> alert rule expression, actuator metric name contract만 검증하며, 실제 alerting, dashboard, tracing, SLO
-> 운영 체계까지 구현했다는 의미는 아닙니다. 실제 Prometheus server scrape 구성에는 bearer token 또는
-> internal network/auth 정책이 필요합니다.
-> `scripts/capture-monitoring-evidence.sh`는 local Prometheus server가 준비됐을 때 target/rule/query artifact를
-> 남기는 도구이며, artifact 검토 전에는 운영형 observability claim으로 승격하지 않습니다.
-> `SPRING_PROFILES_ACTIVE=local-monitoring`은 로컬 전용 ADMIN 계정을 만들어 Prometheus bearer token scrape를
-> 검증하기 위한 profile입니다. 앱을 시작할 때 필수 `MONITORING_ADMIN_PASSWORD`를 명시하고,
-> `scripts/monitoring-local-verify.sh`에도 같은 값을 전달해야 합니다. production 인증/권한 운영 방식으로
-> 해석하지 않습니다.
-
----
-
-## 기술 스택
-
-| 영역 | 기술 |
-| --- | --- |
-| Language | Java 21 |
-| Framework | Spring Boot |
-| Database | PostgreSQL |
-| Migration | Flyway |
-| Cache / Queue / Stock | Redis |
-| Distributed Lock | Redisson |
-| Messaging | Kafka |
-| Security | Spring Security, JWT |
-| Observability | Spring Boot Actuator, Micrometer, Prometheus |
-| Test | JUnit 5, Testcontainers, Spring Kafka Test |
-| Performance | k6 |
-| Infra | Docker Compose |
-| Build | Gradle Kotlin DSL |
-
----
-
-## API 요약
-
-### Queue
-
-| Method | Path | 설명 |
-| --- | --- | --- |
-| `POST` | `/api/queue/enter` | 대기열 진입 |
-| `GET` | `/api/queue/token?scheduleId={id}` | 입장 토큰 발급 |
-| `GET` | `/api/queue/events` | SSE 순번 알림 |
-
-### Reservation
-
-| Method | Path | 설명 |
-| --- | --- | --- |
-| `POST` | `/api/reservations` | 좌석 예매. `queueToken` body, `Idempotency-Key` header 필수 |
-| `GET` | `/api/reservations/{id}` | 본인 예매 조회 |
-| `GET` | `/api/reservations/my` | 내 예매 목록 조회 |
-| `DELETE` | `/api/reservations/{id}` | 본인 예매 취소 |
-
-### Payment
-
-| Method | Path | 설명 |
-| --- | --- | --- |
-| `POST` | `/api/payments` | mock payment. `Idempotency-Key` header 필수 |
-| `GET` | `/api/payments/{id}` | 본인 결제 조회 |
-
-### Admin
-
-| Method | Path | 설명 |
-| --- | --- | --- |
-| `POST` | `/api/admin/dlt/replay` | `ROLE_ADMIN` 필요. DLT manual replay utility |
-| `POST` | `/api/admin/schedules/{scheduleId}/stock/reconcile` | `ROLE_ADMIN` 필요. Redis stock reconciliation |
-| `POST` | `/api/admin/load-test/reset` | `load-test`, `e2e`, `test` 전용 k6 fixture utility |
-
----
-
-## 실행 방법
-
-### 1. 로컬 환경 변수 준비
-
-`.env`는 Compose가 자동으로 읽지만 Gradle은 자동으로 읽지 않습니다. 아래처럼 shell에 명시적으로
-내보낸 뒤 실행합니다. `.env`와 `.env.*`는 Docker build context와 Git에서 제외됩니다.
-공유 가능한 키 이름과 예시 값만 `.env.example`에 둡니다.
-
-```bash
+~~~bash
 cp .env.example .env
 # DB_PASSWORD와 JWT_SECRET을 로컬 전용 값으로 교체
-set -a
-source .env
-set +a
-```
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build --wait web
+~~~
 
-### 2. 공통 인프라 실행
+브라우저에서 <http://localhost:4173>을 엽니다.
 
-기본 Compose 전체를 띄우지 않고 개발에 필요한 인프라만 지정합니다. Kafka UI가 필요하면
-마지막에 `kafka-ui`를 추가합니다.
+~~~bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml down
+~~~
 
-```bash
-docker compose up -d --wait postgres redis kafka kafka-init
-```
+### 검증
 
-### 3. 애플리케이션 실행
+~~~bash
+./gradlew test --no-daemon
+./gradlew build --no-daemon
+cd web
+npm ci
+npm run typecheck
+npm run lint
+npm run test:run
+npm run build
+~~~
 
-기본 실행은 demo seed와 load-test endpoint를 만들지 않습니다.
+Docker E2E는 PostgreSQL, Redis, Kafka, app, web을 함께 실행합니다.
 
-```bash
-./gradlew bootRun
-```
+~~~bash
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait web
+(cd web && E2E_BASE_URL=http://localhost:4173 npm run e2e)
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v
+~~~
 
-데모 데이터를 포함한 로컬 백엔드만 실행하려면 `demo` profile을 명시합니다.
+## 저장소 구조
 
-```bash
-SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun
-```
+~~~text
+src/                      Spring Boot 애플리케이션과 Testcontainers 테스트
+web/                      React · Vite · TypeScript 클라이언트와 Playwright E2E
+docs/                     설계, 테스트 근거, 한계, runbook
+k6/                       과거 로컬 측정과 재현 스크립트
+docker-compose.demo.yml   사람이 둘러보는 고정 데모 데이터
+docker-compose.e2e.yml    테스트 전용 fixture와 failure 경계
+~~~
 
-### 4. 락 전략 전환
+주요 기술은 Java 21, Spring Boot, PostgreSQL, Redis, Kafka이며, 제품 화면은 React와 TypeScript로
+구현했습니다.
 
-```bash
-./gradlew bootRun --args="--reservation.strategy=pessimistic"
-./gradlew bootRun --args="--reservation.strategy=optimistic"
-./gradlew bootRun --args="--reservation.strategy=distributed"
-```
+## 주장하지 않는 것
 
-### 5. 테스트 실행
+- 로컬 k6 결과를 운영 TPS, capacity, SLO로 해석하지 않습니다.
+- 세 락 전략의 단일 실행 수치를 “우월한 전략”의 근거로 사용하지 않습니다.
+- Outbox/DLT utility를 자동 장애 복구나 exactly-once 보장으로 표현하지 않습니다.
+- 데모 결제를 실제 PG 연동으로 표현하지 않습니다.
+- Docker demo와 E2E 결과를 공개 운영 서비스의 가용성으로 확장하지 않습니다.
 
-통합 테스트는 Testcontainers로 PostgreSQL, Redis, Kafka를 실행합니다. Docker가 필요합니다.
+## 더 자세한 문서
 
-```bash
-./gradlew test
-./gradlew build
-```
-
-### 6. k6 fixture 생성
-
-`/api/admin/load-test/**` endpoint는 로컬 부하 테스트 재현성을 위한 utility입니다. 일반 실행과
-`demo` profile에는 존재하지 않으며 `load-test`, `e2e`, `test`에서만 로드됩니다. 수동 k6 실행 전에는
-별도 terminal에서 다음처럼 애플리케이션을 시작합니다.
-
-```bash
-SPRING_PROFILES_ACTIVE=load-test ./gradlew bootRun
-```
-
-```bash
-curl -X POST "http://localhost:8080/api/admin/load-test/reset?scheduleId=1&userCount=200"
-curl "http://localhost:8080/api/admin/load-test/summary?scheduleId=1"
-```
-
-### 7. k6 실행
-
-```bash
-k6 run k6/scenario-a.js
-k6 run k6/scenario-b.js
-k6 run k6/scenario-c.js
-```
-
-전체 실행:
-
-```bash
-bash k6/run-all.sh
-```
-
-기본 전체 실행은 공개 측정 완료 항목인 scenario-a/b/c만 포함합니다.
-결제와 만료 동시 실행 검증, 중복 요청 replay/conflict 검증,
-대기열 토큰 우회 차단 검증은 짧은 smoke 실행, 비관적 락 단일 재현 실행,
-세 가지 락 전략의 로컬 3회 반복 실행을 보존했습니다. 이 결과는 정합성 시나리오 검증 근거이며
-운영 latency/throughput/capacity claim으로 사용하지 않습니다.
-로컬 반복 검증 시나리오까지 함께 돌리려면 아래처럼 명시적으로 opt-in합니다.
-
-```bash
-INCLUDE_PENDING=1 bash k6/run-all.sh
-```
-
-대기열 토큰 우회 차단 smoke 실행 예시:
-
-```bash
-SMOKE=1 STRATEGY=pessimistic SCENARIO=scenario-f VUS=5 RUNS=1 USER_COUNT=4 SCHEDULE_ID=1 OTHER_SCHEDULE_ID=2 bash k6/run-all.sh
-```
-
-결과는 다음 경로에 저장됩니다.
-
-```text
-k6/results/{timestamp}/{strategy}/{scenario}/run-{n}/
-├── reset.json
-├── summary.json
-├── events.json
-├── k6.log
-└── final-summary.json
-```
-
----
-
-## 성능 결과 요약
-
-상세 내용은 [docs/PERF_RESULT.md](docs/PERF_RESULT.md)에 정리되어 있습니다.
-
-### A. 동일 좌석 경합
-
-조건: 100 VU, 동일 좌석 1개, per-vu-iterations 1회.
-
-| 메트릭 | 비관적 락 | 낙관적 락 | Redis 분산 락 |
-| --- | ---: | ---: | ---: |
-| 성공 수 | 1 | 1 | 1 |
-| 실패 수 | 99 | 99 | 99 |
-| overselling | 0건 | 0건 | 0건 |
-| p95 | 215ms | 106ms | 145ms |
-
-### B. 분산 좌석 예약
-
-조건: 50 VU, 50개 좌석, 각 VU가 서로 다른 좌석 1개 예매.
-
-| 메트릭 | 비관적 락 | 낙관적 락 | Redis 분산 락 |
-| --- | ---: | ---: | ---: |
-| 성공률 | 100% (50/50) | 40% (20/50) | 100% (50/50) |
-| p95 | 95ms | 215ms | 126ms |
-
-### C. 혼합 부하 테스트
-
-조건: 200 VU, 45초, 70% 조회 + 30% 예매.
-
-| 메트릭 | 비관적 락 | 낙관적 락 | Redis 분산 락 |
-| --- | ---: | ---: | ---: |
-| 총 RPS | 969 | 993 | 1,005 |
-| 읽기 p95 | 28ms | 9ms | 7ms |
-| 쓰기 p95 | 37ms | 10ms | 6ms |
-| 쓰기 성공 | 50 | 50 | 50 |
-
----
-
-## 한계
-
-| 항목 | 현재 한계 |
-| --- | --- |
-| 성능 수치 | 로컬 Docker 단일 실행 기준입니다. 실제 운영 환경 수치가 아닙니다. |
-| k6 결과 | A/B/C는 단일 실행 결과입니다. 평균, 표준편차, 신뢰구간을 계산하지 않았습니다. |
-| 세 시나리오 검증 | smoke 실행, 단일 재현 실행, 세 가지 락 전략의 로컬 3회 반복으로 정책 분기와 실패 조건을 확인했습니다. |
-| 결제 | 외부 PG 연동이 아니라 mock payment 즉시 성공 구조입니다. |
-| DLT replay | `ROLE_ADMIN` 권한으로 호출하는 manual utility입니다. 운영용 자동 복구 시스템이 아닙니다. |
-| Admin 계정 | 기본 회원가입은 `USER` 권한만 생성합니다. admin 계정 발급/운영 절차는 별도 과제입니다. |
-| Redis 장애 | Redis 장애 자동 fallback은 구현하지 않았습니다. DB 기준 reconciliation utility로 수동 보정합니다. |
-| Observability | Actuator/Micrometer metric, contract test, local 템플릿과 scrape artifact는 있습니다. |
-| Autoscaling | 배포 환경의 autoscaling과 운영 알림은 구현 범위에 포함하지 않았습니다. |
-
-세 시나리오는 운영 성능 claim과 신뢰구간을 아직 주장하지 않습니다.
-Observability는 실제 alert firing, dashboard 운영, tracing, SLO 체계를 아직 주장하지 않습니다.
-관련 artifact는 `docs/evidence/monitoring/prometheus-20260522T155512Z/capture-summary.json`입니다.
-
----
-
-## 문서
-
-| 문서 | 내용 |
-| --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 전체 구조도, 핵심 설계 판단, 장애/정합성 보정 경계 |
-| [docs/DESIGN.md](docs/DESIGN.md) | 상태 전이, 대기열, 락 전략, Outbox/DLT, Redis reconciliation 설계 |
-| [docs/PERF_RESULT.md](docs/PERF_RESULT.md) | k6 측정 결과와 추가 검증 예정 범위 |
-| [docs/TESTING.md](docs/TESTING.md) | Testcontainers/k6가 어떤 claim을 지지하는지 정리 |
-| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Outbox DEAD, DLT replay, Redis stock mismatch, queue token abuse 대응 절차 |
-| [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | 아직 주장하지 않는 것과 다음 보강 과제 |
-| [docs/LOCK_STRATEGY_GUIDE.md](docs/LOCK_STRATEGY_GUIDE.md) | 비관적/낙관적/Redis 분산 락 선택 기준과 측정 결과 해석 |
-| [docs/INTERVIEW_GUIDE.md](docs/INTERVIEW_GUIDE.md) | 면접에서 설명할 핵심 질문과 안전한 답변 |
-| [docs/STUDY_GUIDE.md](docs/STUDY_GUIDE.md) | 코드 흐름 학습 가이드 |
-
-`monitoring/`에는 Prometheus/Grafana local verification 템플릿, actuator metric name contract test,
-synthetic alert rule test와 local Prometheus scrape artifact가 있습니다. 실제 alert firing, dashboard 운영,
-tracing, SLO 체계를 구현했다는 주장은 하지 않습니다.
+- [실패 경계 중심 아키텍처](docs/ARCHITECTURE.md)
+- [검증 근거와 실행 명령](docs/TESTING.md)
+- [구현 상세](docs/DESIGN.md)
+- [로컬 재현 절차](docs/RUNBOOK.md)
+- [현재 한계](docs/LIMITATIONS.md)
+- [과거 측정 기록과 해석 경계](docs/PERF_RESULT.md)
