@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420"
+  style="max-width:100%" role="img" aria-label="예약 요청 처리 구조: 대기열, 락 전략, Outbox, Kafka DLT">
+  <rect width="880" height="420" rx="12" fill="#14161f"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8a90a3"/>
+    </marker>
+  </defs>
+  <style>
+    .box{fill:#1d2029;stroke:#3a3f4f;stroke-width:1.5;rx:10}
+    .t{fill:#e8e9ee;font:600 14px 'Pretendard',-apple-system,sans-serif}
+    .s{fill:#9aa0b0;font:11px 'Pretendard',-apple-system,sans-serif}
+    .m{fill:#9aa0b0;font:11px ui-monospace,Menlo,monospace}
+    .ln{stroke:#8a90a3;stroke-width:1.5;fill:none}
+  </style>
+  <text x="24" y="36" class="m">예약 요청의 경로 — 락 전략 3종 비교와 이벤트 복구</text>
+
+  <rect x="24" y="64" width="110" height="56" rx="10" class="box"/>
+  <text x="79" y="96" text-anchor="middle" class="t">클라이언트</text>
+
+  <rect x="186" y="64" width="170" height="56" rx="10" class="box"/>
+  <text x="271" y="88" text-anchor="middle" class="t">대기열 · Queue Token</text>
+  <text x="271" y="106" text-anchor="middle" class="s">입장 토큰 검증·소비</text>
+
+  <rect x="408" y="64" width="200" height="56" rx="10" class="box"/>
+  <text x="508" y="88" text-anchor="middle" class="t">예약 서비스</text>
+  <text x="508" y="106" text-anchor="middle" class="s">Idempotency-Key 강제</text>
+
+  <rect x="700" y="64" width="156" height="56" rx="10" class="box"/>
+  <text x="778" y="88" text-anchor="middle" class="t">PostgreSQL</text>
+  <text x="778" y="106" text-anchor="middle" class="s">좌석 · 예약 · 결제</text>
+
+  <line x1="134" y1="92" x2="184" y2="92" class="ln" marker-end="url(#a)"/>
+  <line x1="356" y1="92" x2="406" y2="92" class="ln" marker-end="url(#a)"/>
+  <line x1="608" y1="92" x2="698" y2="92" class="ln" marker-end="url(#a)"/>
+
+  <rect x="186" y="168" width="170" height="56" rx="10" class="box"/>
+  <text x="271" y="192" text-anchor="middle" class="t">Redis 재고 선차감</text>
+  <text x="271" y="210" text-anchor="middle" class="s">소진 요청은 DB 진입 차단</text>
+
+  <rect x="408" y="168" width="200" height="64" rx="10" fill="#1d2029" stroke="#b78ae8" stroke-width="1.5"/>
+  <text x="508" y="194" text-anchor="middle" class="t">락 전략 (교체 가능)</text>
+  <text x="508" y="212" text-anchor="middle" class="s">비관적 · 낙관적 · Redis 분산</text>
+
+  <line x1="508" y1="120" x2="508" y2="166" class="ln" marker-end="url(#a)"/>
+  <line x1="356" y1="196" x2="406" y2="196" class="ln" marker-end="url(#a)"/>
+
+  <rect x="408" y="300" width="150" height="56" rx="10" class="box"/>
+  <text x="483" y="324" text-anchor="middle" class="t">Outbox</text>
+  <text x="483" y="342" text-anchor="middle" class="s">커밋과 발행 분리</text>
+
+  <rect x="610" y="300" width="120" height="56" rx="10" class="box"/>
+  <text x="670" y="332" text-anchor="middle" class="t">Kafka</text>
+
+  <rect x="772" y="300" width="84" height="56" rx="10" fill="#1d2029" stroke="#b78ae8" stroke-width="1.5"/>
+  <text x="814" y="332" text-anchor="middle" class="t">DLT</text>
+
+  <line x1="483" y1="232" x2="483" y2="298" class="ln" marker-end="url(#a)"/>
+  <text x="472" y="270" text-anchor="end" class="s">확정 이벤트</text>
+  <line x1="558" y1="328" x2="608" y2="328" class="ln" marker-end="url(#a)"/>
+  <line x1="730" y1="328" x2="770" y2="328" class="ln" marker-end="url(#a)"/>
+  <text x="750" y="318" text-anchor="middle" class="s">실패</text>
+  <path d="M 814 356 C 814 392 670 392 670 358" class="ln" stroke-dasharray="4 4" marker-end="url(#a)"/>
+  <text x="742" y="402" text-anchor="middle" class="s">수동 replay</text>
+
+  <text x="24" y="404" class="m">100 VU 동일 좌석 경합: 성공 1 · 실패 99 · oversell 0건 (3전략 모두)</text>
+</svg>
