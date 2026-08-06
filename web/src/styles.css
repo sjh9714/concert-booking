@@ -1,18 +1,68 @@
+/*
+ * 값의 기준은 DESIGN.md다. 여기 없는 색·크기를 화면에서 즉석으로 만들지 않는다.
+ *
+ * 공연 티켓은 포스터다 — 한 장면이 크게 서고 나머지가 작게 붙는다.
+ * DICE.fm 실측(2026-08-07): 색은 사실상 흑백(검정 1,433 · 흰색 572),
+ * 디스플레이 106px, 라벨 12px/700/자간 0.72px, 액센트는 형광색 하나.
+ */
 :root {
-  font-family: Inter, Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #181614;
-  background: #f3f0ea;
+  font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Noto Sans KR", sans-serif;
+  color: #0a0a0a;
+  background: #f7f6f3;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #181614;
-  --paper: #f3f0ea;
-  --white: #fffdf9;
-  --muted: #706b64;
-  --line: #cbc5bb;
-  --accent: #e44f3b;
-  --accent-dark: #b93828;
-  --success: #1f6b4f;
+
+  --ink: #0a0a0a;
+  /* 순백이 아니라 인쇄지 쪽으로 */
+  --paper: #f7f6f3;
+  --white: #ffffff;
+  --muted: #6b6862;
+  --line: #d8d5cf;
+
+  /* 액센트는 하나뿐이다. "지금 눌러야 할 것" 한 곳에만.
+     검정 위에서만 쓴다 — 흰 배경 위에서는 대비가 1.7:1이라 글자가 안 읽힌다. */
+  --volt: #d8ff2e;
+
+  --sold: #b8b4ac;
+  --danger: #c2381f;
+
   --header-height: 72px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root { --success: #1f6b4f; }
+
+/* ── 타이포 스케일 (DESIGN.md 표) ─────────────────────────── */
+
+.display {
+  font-size: clamp(56px, 11vw, 128px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.86;
+  margin: 0;
+}
+
+.headline {
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 0;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 * { box-sizing: border-box; }
@@ -31,7 +81,9 @@ button { cursor: pointer; }
 
 button:disabled { cursor: not-allowed; }
 
-:focus-visible { outline: 3px solid #2266aa; outline-offset: 3px; }
+/* 검정 외곽선. 종이 위에서 가장 확실하게 보이고, 액센트를 여기 쓰면
+   "눌러야 할 것"과 "지금 포커스된 것"이 섞인다. */
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
 .skip-link {
   position: fixed;
@@ -99,11 +151,14 @@ button:disabled { cursor: not-allowed; }
 .correctness-list { margin: 0; padding: 0; list-style: none; }
 .correctness-list li { display: grid; grid-template-columns: 42px 1fr; gap: 18px; padding: 24px 0; border-top: 1px solid var(--line); }
 .correctness-list li:last-child { border-bottom: 1px solid var(--line); }
-.correctness-list li > span { color: var(--accent-dark); font-size: .76rem; font-weight: 800; letter-spacing: .08em; }
+.correctness-list li > span { color: var(--ink); font-size: .76rem; font-weight: 800; letter-spacing: .08em; }
 .correctness-list h3 { margin: 0 0 8px; font-size: 1.05rem; }
 .correctness-list p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }
 
-.eyebrow { margin: 0 0 16px; font-size: .73rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+/* 색을 못 박지 않는다. 이 클래스는 종이 위에도, 검정·초록 면 위에도 쓰인다.
+   한 번 var(--muted)로 고정했다가 예매 완료 화면(초록)에서 대비 1.15:1이 됐다.
+   글자색은 그 면이 정하고, 여기서는 크기와 자간만 정한다. */
+.eyebrow { margin: 0 0 16px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
 .catalog-intro {
   min-height: calc(78svh - var(--header-height));
@@ -138,7 +193,7 @@ button:disabled { cursor: not-allowed; }
 
 .venue-ring::after { transform: rotate(90deg); }
 
-.venue-ring i { display: block; width: 38%; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
+.venue-ring i { display: block; width: 38%; aspect-ratio: 1; border-radius: 50%; background: var(--ink); }
 
 .catalog-list, .schedule-list, .reservation-list { padding: clamp(64px, 8vw, 110px) 4vw; }
 
@@ -166,7 +221,7 @@ button:disabled { cursor: not-allowed; }
 
 .concert-index { color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.concert-primary span { display: block; color: var(--accent-dark); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.concert-primary span { display: block; color: var(--ink); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 
 .concert-primary h3 { margin: 7px 0 0; font-size: clamp(1.45rem, 2.5vw, 2.6rem); letter-spacing: -.04em; }
 
@@ -180,29 +235,74 @@ button:disabled { cursor: not-allowed; }
 
 .loading-state { min-height: calc(100svh - var(--header-height)); display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--muted); }
 
-.loading-mark { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+.loading-mark { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; }
 
 .error-state, .not-found { min-height: calc(100svh - var(--header-height)); padding: 14vh 4vw; }
 
 .error-state h1, .not-found h1 { max-width: 800px; margin: 0 0 24px; font-size: clamp(3rem, 7vw, 7rem); line-height: .95; letter-spacing: -.07em; }
 
+/* 알약형 · 12px/700/자간 0.08em — DICE 실측을 따랐다.
+   이름은 그대로 두고 정의만 바꿨다. 21곳의 호출부를 건드릴 이유가 없다. */
 .primary-button, .secondary-button {
   min-height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 22px;
-  border: 1px solid var(--ink);
+  gap: 8px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--ink);
   background: var(--ink);
-  color: var(--white);
-  font-weight: 750;
+  /* 액센트는 검정 위에서만. 흰 배경 위 형광색은 대비 1.7:1이라 안 읽힌다. */
+  color: var(--volt);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background 180ms var(--ease), color 180ms var(--ease);
 }
 
-.primary-button:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.primary-button:hover:not(:disabled) { background: #232323; }
 
-.primary-button:disabled { background: #a49e96; border-color: #a49e96; }
+.primary-button:disabled {
+  background: var(--sold);
+  box-shadow: inset 0 0 0 1px var(--sold);
+  color: var(--white);
+}
 
 .secondary-button { background: transparent; color: var(--ink); }
+.secondary-button:hover { background: var(--ink); color: var(--volt); }
+
+/*
+ * 어두운 면 위에서는 뒤집는다.
+ *
+ * 검정 배경(대기실)에 검정 버튼을 두면 사라진다. 실제로 그렇게 만들어 놓고
+ * 스크린샷에서 발견했다 — 액센트를 "검정 위에서만 쓴다"고 정해 두었는데,
+ * 그 규칙이 버튼 자체가 검정일 때는 성립하지 않는다.
+ */
+.queue-page .primary-button,
+.auth-context .primary-button {
+  background: var(--volt);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.queue-page .primary-button:hover:not(:disabled),
+.auth-context .primary-button:hover:not(:disabled) { background: #e6ff5c; }
+
+.queue-page .primary-button:disabled {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #4a4a4a;
+  color: #8f8f8f;
+}
+
+.queue-page .secondary-button { color: var(--white); box-shadow: inset 0 0 0 1px #4a4a4a; }
+.queue-page .secondary-button:hover { background: var(--volt); color: var(--ink); }
+
+/* 어두운 면에서는 포커스 링도 보여야 한다 */
+.queue-page :focus-visible,
+.auth-context :focus-visible { outline-color: var(--volt); }
 
 .full { width: 100%; }
 
@@ -210,7 +310,7 @@ button:disabled { cursor: not-allowed; }
 
 .auth-context { background: var(--ink); color: var(--white); padding: 5vw; display: grid; grid-template-rows: auto 1fr auto; }
 
-.auth-number { margin: 0; align-self: center; font-size: clamp(9rem, 22vw, 20rem); line-height: .7; font-weight: 850; color: var(--accent); letter-spacing: -.1em; }
+.auth-number { margin: 0; align-self: center; font-size: clamp(9rem, 22vw, 20rem); line-height: .7; font-weight: 900; color: var(--volt); letter-spacing: -.1em; }
 
 .auth-context > p:last-child { color: #b9b2aa; line-height: 1.7; }
 
@@ -261,7 +361,7 @@ button:disabled { cursor: not-allowed; }
 
 .schedule-row span { color: var(--muted); }
 
-.schedule-row strong { color: var(--accent-dark); }
+.schedule-row strong { color: var(--ink); }
 
 .schedule-row:disabled { color: #9b958d; }
 
@@ -277,15 +377,16 @@ button:disabled { cursor: not-allowed; }
 
 .queue-focus { align-self: center; text-align: center; }
 
-.queue-focus > span { color: #aaa39b; }
+.queue-focus > span { display: block; color: #aaa39b; }
 
-.queue-focus strong { display: block; margin: 12px 0; font-size: clamp(8rem, 26vw, 24rem); line-height: .76; letter-spacing: -.1em; color: var(--accent); font-variant-numeric: tabular-nums; }
+/* 이 화면에서 가장 밝은 것. 검정 위라 형광색을 쓸 수 있다. */
+.queue-focus strong { display: block; margin: 12px 0; font-size: clamp(8rem, 26vw, 24rem); line-height: .76; letter-spacing: -.1em; color: var(--volt); font-variant-numeric: tabular-nums; }
 
 .queue-focus p { color: #c2bbb4; }
 
 .queue-line { height: 2px; background: #4d4945; }
 
-.queue-line span { display: block; height: 100%; background: var(--accent); transition: width .5s ease; }
+.queue-line span { display: block; height: 100%; background: var(--volt); transition: width .5s ease; }
 
 .queue-actions { padding-top: 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 
@@ -317,22 +418,48 @@ button:disabled { cursor: not-allowed; }
 
 .seat-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.seat { width: 44px; min-width: 44px; height: 44px; border: 1px solid #8c857c; background: var(--white); color: var(--ink); font-size: .78rem; transition: transform .15s ease, background-color .15s ease; }
+/* 좌석은 모서리를 둥글리지 않는다. 상태는 색만으로 말하지 않는다 —
+   선택함은 채움과 굵은 테두리를 함께 주고, 판매 완료는 취소선을 남긴다.
+   aria-label에도 상태가 들어간다(SeatGrid.tsx). */
+.seat {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  /* 좌석 선택은 즉시 반응해야 한다. 늦게 반응하면 두 번 누른다.
+     transform만 부드럽게 두고 색은 바로 바뀐다. */
+  transition: transform 120ms var(--ease);
+}
 
 .seat:hover:not(:disabled) { transform: translateY(-3px); border-color: var(--ink); }
 
-.seat.selected { background: var(--accent); border-color: var(--accent-dark); color: white; }
+.seat.selected {
+  background: var(--ink);
+  border: 2px solid var(--ink);
+  color: var(--volt);
+}
 
-.seat.unavailable { background: #d9d4cc; color: #9b958d; border-color: #d9d4cc; text-decoration: line-through; }
+.seat.unavailable {
+  background: var(--sold);
+  color: var(--white);
+  border-color: var(--sold);
+  text-decoration: line-through;
+}
 .seat.refreshing { opacity: .55; }
 
 .seat-legend { max-width: 940px; margin: 32px auto 0; display: flex; gap: 24px; color: var(--muted); font-size: .75rem; }
 
 .seat-legend span { display: inline-flex; align-items: center; gap: 7px; }
 
-.legend-dot { width: 14px; height: 14px; border: 1px solid #8c857c; background: var(--white); }
-.legend-dot.selected { background: var(--accent); border-color: var(--accent-dark); }
-.legend-dot.unavailable { background: #d9d4cc; border-color: #d9d4cc; }
+.legend-dot { width: 14px; height: 14px; border: 1px solid var(--line); background: var(--white); }
+.legend-dot.selected { background: var(--ink); border-color: var(--ink); }
+.legend-dot.unavailable { background: var(--sold); border-color: var(--sold); }
 
 .selection-bar { position: fixed; z-index: 12; left: 0; right: 0; bottom: 0; min-height: 110px; padding: 20px 4vw; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 28px; align-items: center; background: var(--ink); color: var(--white); }
 
@@ -352,7 +479,8 @@ button:disabled { cursor: not-allowed; }
 
 .hold-countdown { align-self: center; text-align: right; }
 .hold-countdown span { display: block; color: #aaa39b; font-size: .8rem; }
-.hold-countdown strong { font-size: clamp(3rem, 7vw, 6rem); color: var(--accent); font-variant-numeric: tabular-nums; }
+/* 남은 시간은 급한 정보다. 종이 위라 형광색 대신 경고색을 쓴다. */
+.hold-countdown strong { font-size: clamp(3rem, 7vw, 6rem); font-weight: 900; letter-spacing: -.04em; color: var(--danger); font-variant-numeric: tabular-nums; }
 
 .reservation-status.confirmed { background: var(--success); }
 .reservation-status.cancelled, .reservation-status.expired { background: #5e5953; }
@@ -394,7 +522,7 @@ button:disabled { cursor: not-allowed; }
 
 .status-label { width: fit-content; padding: 6px 8px; border: 1px solid var(--line); font-size: .72rem; font-weight: 800; }
 .status-label.confirmed { color: var(--success); border-color: var(--success); }
-.status-label.pending { color: var(--accent-dark); border-color: var(--accent-dark); }
+.status-label.pending { color: var(--ink); border-color: var(--ink); }
 
 .empty-state { padding: 90px 0; text-align: center; }
 .empty-state h2 { margin: 0 0 10px; font-size: 2rem; }
@@ -471,4 +599,22 @@ button:disabled { cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+
+/* ── 재작성 (DESIGN.md) ────────────────────────────────────
+   카드는 모서리를 둥글리지 않는다. 그림자도 없다 — 종이는 뜨지 않는다.
+   둥근 것은 알약 버튼과 상태 칩뿐이다.
+
+   버튼 이름은 .primary-button / .secondary-button 하나뿐이다.
+   재작성하면서 .btn-primary를 새로 만들었다가 어두운 면 규칙이 한쪽에만 걸려
+   대기실 버튼이 사라졌다. 이름이 둘이면 한쪽만 고치는 일이 생긴다. */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0s !important;
+  }
+  html { scroll-behavior: auto; }
 }
