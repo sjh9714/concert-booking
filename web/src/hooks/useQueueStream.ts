@@ -67,14 +67,31 @@ export function useQueueStream(
   const [position, setPosition] = useState<QueuePosition | null>(null);
   const [transport, setTransport] = useState<Transport>("connecting");
 
-  useEffect(() => {
+  /*
+   * 바깥에서 들어온 값이 바뀌면 렌더 중에 맞춘다 (React의 "props가 바뀔 때 state 조정" 패턴).
+   *
+   * 처음엔 effect 안에서 setState를 했다가 `react-hooks/set-state-in-effect`에 걸렸다.
+   * 규칙을 피하려고 옮긴 게 아니라, effect는 "그린 뒤에" 도는 것이라 한 번 틀린 화면을
+   * 그리고 나서 고치게 된다. 렌더 중에 맞추면 틀린 화면 자체가 나오지 않는다.
+   */
+  const [seenSeed, setSeenSeed] = useState(seed);
+  if (seed !== seenSeed) {
+    setSeenSeed(seed);
     if (seed) setPosition(seed);
-  }, [seed]);
+  }
+
+  // 연결 대상이 바뀌면 상태를 "연결 중"으로 되돌린다.
+  // 이전 연결의 live/polling 표시가 새 연결에 남아 있으면 화면이 거짓말을 한다.
+  const connectionKey = enabled && token && Number.isFinite(scheduleId) ? `${scheduleId}` : null;
+  const [seenConnection, setSeenConnection] = useState(connectionKey);
+  if (connectionKey !== seenConnection) {
+    setSeenConnection(connectionKey);
+    setTransport("connecting");
+  }
 
   useEffect(() => {
     if (!token || !Number.isFinite(scheduleId) || !enabled) return;
     const controller = new AbortController();
-    setTransport("connecting");
 
     const connect = async () => {
       let reconnects = 0;
