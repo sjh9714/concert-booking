@@ -1,48 +1,20 @@
-import { fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
 import { useEffect, useRef, useState } from "react";
-import {
-  Navigate,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { apiFetch, apiUrl, handleUnauthorized } from "../lib/api";
-import {
-  queuePositionSchema,
-  queueTokenSchema,
-  type QueuePosition,
-} from "../lib/contracts";
+import { useQueueStream } from "../hooks/useQueueStream";
+import { apiFetch } from "../lib/api";
+import { queuePositionSchema, queueTokenSchema, type QueuePosition } from "../lib/contracts";
 import { writeQueueToken } from "../lib/session";
 
-const MAX_SSE_RECONNECTS = 3;
-const SSE_RECONNECT_BASE_DELAY_MS = 500;
-
-function parseEvent(message: EventSourceMessage): QueuePosition | null {
-  if (!message.data || message.data === "heartbeat") return null;
-  try {
-    const parsed: unknown = JSON.parse(message.data);
-    const result = queuePositionSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
-}
-
-function waitForReconnect(delayMs: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => {
-    const finish = () => {
-      window.clearTimeout(timer);
-      signal.removeEventListener("abort", finish);
-      resolve();
-    };
-    const timer = window.setTimeout(finish, delayMs);
-    signal.addEventListener("abort", finish, { once: true });
-  });
-}
-
+/**
+ * 대기실.
+ *
+ * 이 화면만 배경이 검정이다(DESIGN.md). 기다리는 시간은 다른 시간이라는 인상을 주고,
+ * 그 위에서 액센트 하나가 가장 밝게 선다.
+ *
+ * SSE 재연결과 폴링 강등은 `useQueueStream`이 맡는다. 여기 있을 때는 브라우저를 띄워야만
+ * 확인할 수 있었다.
+ */
 export function QueuePage() {
   const { scheduleId = "" } = useParams();
   const schedule = Number(scheduleId);
@@ -51,114 +23,34 @@ export function QueuePage() {
   const { session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [position, setPosition] = useState<QueuePosition | null>(null);
-  const [transport, setTransport] = useState<"connecting" | "live" | "polling">("connecting");
+
+  const [entered, setEntered] = useState<QueuePosition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [reentering, setReentering] = useState(false);
-  const entered = useRef(false);
+  const enterCalled = useRef(false);
 
   useEffect(() => {
-    if (!session || !Number.isFinite(schedule) || entered.current) return;
-    entered.current = true;
+    if (!session || !Number.isFinite(schedule) || enterCalled.current) return;
+    enterCalled.current = true;
     void apiFetch(`/api/queue/enter`, {
       method: "POST",
       token: session.token,
       body: { scheduleId: schedule },
       schema: queuePositionSchema,
     })
-      .then(setPosition)
+      .then(setEntered)
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : "대기열에 진입하지 못했습니다.");
       });
   }, [schedule, session]);
 
-  useEffect(() => {
-    if (!session || !Number.isFinite(schedule) || !entered.current) return;
-    const controller = new AbortController();
-    setTransport("connecting");
-
-    const connect = async () => {
-      let reconnects = 0;
-      while (!controller.signal.aborted) {
-        let streamCompleted = false;
-        try {
-          await fetchEventSource(
-            apiUrl(`/api/queue/events?scheduleId=${schedule}`),
-            {
-              headers: { Authorization: `Bearer ${session.token}` },
-              signal: controller.signal,
-              openWhenHidden: true,
-              onopen: async (response) => {
-                if (response.status === 401) {
-                  streamCompleted = true;
-                  handleUnauthorized();
-                  throw new Error("SSE 401");
-                }
-                const contentType = response.headers.get("content-type");
-                if (
-                  !response.ok ||
-                  !contentType?.startsWith("text/event-stream")
-                ) {
-                  throw new Error(`SSE ${response.status}`);
-                }
-                setTransport("live");
-              },
-              onmessage: (message) => {
-                const next = parseEvent(message);
-                if (next) setPosition(next);
-                if (message.event === "READY") {
-                  setPosition((current) =>
-                    current ? { ...current, status: "READY" } : current,
-                  );
-                }
-                if (message.event === "COMPLETED") streamCompleted = true;
-              },
-              // A normal EOF resolves fetchEventSource. The outer loop applies
-              // the same finite reconnect budget as terminal fetch errors.
-              onclose: () => undefined,
-              // Throwing stops this library invocation; otherwise it retries
-              // forever internally and the component cannot enforce a budget.
-              onerror: (caught) => {
-                throw caught;
-              },
-            },
-          );
-        } catch {
-          // Normal close and network failure share the bounded retry path.
-        }
-
-        if (controller.signal.aborted || streamCompleted) return;
-        if (reconnects >= MAX_SSE_RECONNECTS) {
-          setTransport("polling");
-          return;
-        }
-
-        const delay = SSE_RECONNECT_BASE_DELAY_MS * 2 ** reconnects;
-        reconnects += 1;
-        setTransport("connecting");
-        await waitForReconnect(delay, controller.signal);
-      }
-    };
-
-    void connect();
-
-    return () => controller.abort();
-  }, [schedule, session]);
-
-  useEffect(() => {
-    if (transport !== "polling" || !session) return;
-    const poll = () =>
-      void apiFetch(`/api/queue/position?scheduleId=${schedule}`, {
-        token: session.token,
-        schema: queuePositionSchema,
-      })
-        .then(setPosition)
-        .catch(() => undefined);
-    poll();
-    const interval = window.setInterval(poll, 1500);
-    return () => window.clearInterval(interval);
-  }, [schedule, session, transport]);
+  // 진입·재진입 응답을 스트림에 넘긴다. 스트림이 그걸 현재 값으로 받아들이므로
+  // 여기서 둘 중 하나를 고르지 않는다 — 고르게 했더니 폴링이 채운 오래된 값이
+  // 재진입 결과를 덮었다.
+  const stream = useQueueStream(schedule, session?.token ?? null, entered !== null, entered);
+  const position = stream.position;
+  const transport = stream.transport;
 
   if (!session) {
     return (
@@ -173,6 +65,7 @@ export function QueuePage() {
   const expired = position?.status === "EXPIRED";
   const notJoined = position?.status === "NOT_JOINED";
   const needsReentry = expired || notJoined;
+
   const issueToken = async () => {
     setIssuing(true);
     setError(null);
@@ -200,7 +93,7 @@ export function QueuePage() {
         body: { scheduleId: schedule },
         schema: queuePositionSchema,
       });
-      setPosition(next);
+      setEntered(next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "대기열에 다시 진입하지 못했습니다.");
     } finally {
@@ -211,15 +104,27 @@ export function QueuePage() {
   return (
     <main id="main-content" className="queue-page">
       <div className="queue-meta">
-        <p className="eyebrow">WAITING ROOM</p>
+        <p className="label">Waiting Room</p>
+        {/* 연결 상태를 색만으로 말하지 않는다 — 글자로도 적는다 */}
         <span className={`live-state ${transport}`}>
           <i aria-hidden="true" />
-          {transport === "live" ? "실시간 연결" : transport === "polling" ? "자동 새로고침" : "연결 중"}
+          {transport === "live"
+            ? "실시간 연결"
+            : transport === "polling"
+              ? "자동 새로고침"
+              : "연결 중"}
         </span>
       </div>
+
       <section className="queue-focus" aria-live="polite">
-        <span>현재 내 순서</span>
-        <strong>{position?.position && position.position > 0 ? position.position.toLocaleString("ko-KR") : ready ? "입장" : "—"}</strong>
+        <span className="label">현재 내 순서</span>
+        <strong className="display">
+          {position?.position && position.position > 0
+            ? position.position.toLocaleString("ko-KR")
+            : ready
+              ? "입장"
+              : "—"}
+        </strong>
         <p>
           {ready
             ? "좌석을 선택할 차례입니다. 입장 후 5분 동안 토큰이 유효합니다."
@@ -227,13 +132,22 @@ export function QueuePage() {
               ? "입장 시간이 만료되었습니다. 다시 참여하면 새 순서를 받습니다."
               : notJoined
                 ? "현재 대기열에 참여하지 않았습니다. 다시 참여해 순서를 받으세요."
-            : position?.status === "WAITING"
-              ? `전체 ${position.totalWaiting.toLocaleString("ko-KR")}명이 기다리고 있습니다.`
-              : "순서를 확인하고 있습니다."}
+                : position?.status === "WAITING"
+                  ? `전체 ${position.totalWaiting.toLocaleString("ko-KR")}명이 기다리고 있습니다.`
+                  : "순서를 확인하고 있습니다."}
         </p>
       </section>
-      <div className="queue-line" aria-hidden="true"><span style={{ width: ready ? "100%" : "38%" }} /></div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+
+      <div className="queue-line" aria-hidden="true">
+        <span style={{ width: ready ? "100%" : "38%" }} />
+      </div>
+
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+
       <div className="queue-actions">
         <button
           className="primary-button"
