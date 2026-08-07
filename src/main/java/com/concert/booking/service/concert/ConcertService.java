@@ -27,15 +27,19 @@ public class ConcertService {
     private final SeatRepository seatRepository;
 
     public List<ConcertResponse> getConcerts() {
+        // 목록에서 사람이 고르려면 언제 하는지와 자리가 남았는지를 알아야 한다.
+        // 공연마다 회차를 한 번씩 더 부르지만 목록은 공연 몇 개짜리라 이 정도면 된다.
+        // 공연 수가 늘면 회차를 한 번에 가져와 묶는 쪽으로 바꾼다.
         return concertRepository.findAll().stream()
-                .map(ConcertResponse::from)
+                .map(concert -> ConcertResponse.from(
+                        concert, concertScheduleRepository.findByConcertId(concert.getId())))
                 .toList();
     }
 
     public ConcertResponse getConcert(Long concertId) {
         Concert concert = concertRepository.findById(concertId)
                 .orElseThrow(() -> new ResourceNotFoundException("콘서트를 찾을 수 없습니다: " + concertId));
-        return ConcertResponse.from(concert);
+        return ConcertResponse.from(concert, concertScheduleRepository.findByConcertId(concertId));
     }
 
     public List<ConcertScheduleResponse> getSchedules(Long concertId) {
