@@ -19,7 +19,8 @@ function Layout() {
       <Outlet />
       <footer className="site-footer">
         <span>TICKETLINE</span>
-        <p>포트폴리오용 콘서트 예매 데모 · 실제 결제가 발생하지 않습니다.</p>
+        {/* 결제가 실제가 아니라는 사실은 반드시 남긴다. 그건 설명이 아니라 고지다 */}
+        <p>테스트 환경입니다. 실제 결제와 발권은 이루어지지 않습니다.</p>
       </footer>
     </>
   );

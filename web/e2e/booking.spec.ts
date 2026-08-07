@@ -242,34 +242,6 @@ test("catalog is accessible and opens a concert", async ({ page }) => {
   expect(clientErrors).toEqual([]);
 });
 
-test("correctness explanation opens as a keyboard-dismissible drawer", async ({
-  page,
-}, testInfo) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const menu = page.getByRole("button", { name: "메뉴 열기" });
-  if (await menu.isVisible()) {
-    await menu.click();
-    await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
-  }
-  const trigger = page.getByRole("button", { name: "예매가 안전한 이유" });
-  await trigger.click();
-  const drawer = page.getByRole("dialog", {
-    name: "예매 흐름이 정확성을 지키는 법",
-  });
-  await expect(drawer).toBeVisible();
-  await expect(drawer.getByText("같은 좌석에는 한 명만")).toBeVisible();
-  const results = await new AxeBuilder({ page }).include("#correctness-drawer").analyze();
-  expect(
-    results.violations.filter((violation) =>
-      ["serious", "critical"].includes(violation.impact ?? ""),
-    ),
-  ).toEqual([]);
-  await page.keyboard.press("Escape");
-  await expect(drawer).toBeHidden();
-  if (testInfo.project.name === "desktop") await expect(trigger).toBeFocused();
-});
-
 test("user can reserve and complete a demo payment", async ({ page, request }) => {
   await resetPrimarySchedule(request);
   const clientErrors = captureClientErrors(page);
@@ -286,8 +258,8 @@ test("user can reserve and complete a demo payment", async ({ page, request }) =
   await page.getByRole("button", { name: "좌석 선택으로 입장" }).click();
   await page.getByRole("button", { name: /선택 가능/ }).first().click();
   await page.getByRole("button", { name: "이 좌석으로 예매" }).click();
-  await expect(page.getByText("데모 결제로 좌석 확정")).toBeVisible();
-  await page.getByRole("button", { name: /데모 결제/ }).click();
+  await expect(page.getByText("결제하고 좌석 확정")).toBeVisible();
+  await page.getByRole("button", { name: /결제하기/ }).click();
   await expect(page.getByRole("heading", { name: "예매 확정" })).toBeVisible();
   const results = await new AxeBuilder({ page }).analyze();
   expect(
@@ -841,4 +813,41 @@ test.describe("움직임을 줄이는 설정", () => {
     await banner.getByRole("button", { name: /3번째:/ }).click();
     await expect.poll(shown).toContain("3번째");
   });
+});
+
+/*
+ * 자동 넘김이 멈추는 조건.
+ *
+ * "가끔 안 넘어간다"는 보고를 받고 재 보니 원인이 마우스 호버였다.
+ * 배너가 화면 위쪽을 통째로 덮어서 포인터가 그냥 거기 있는 일이 잦다.
+ * 이제 호버로는 멈추지 않고, 키보드 포커스로만 멈춘다.
+ */
+test("포인터가 배너 위에 있어도 자동 넘김은 계속된다", async ({ page }) => {
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "추천 공연" });
+  const shown = () => banner.locator(".banner-thumb[aria-current]").getAttribute("aria-label");
+  const first = await shown();
+
+  await banner.hover();
+  await expect.poll(shown, { timeout: 8_000 }).not.toBe(first);
+});
+
+test("키보드로 배너 안에 들어가면 자동 넘김이 멈춘다", async ({ page }) => {
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "추천 공연" });
+  const shown = () => banner.locator(".banner-thumb[aria-current]").getAttribute("aria-label");
+
+  // 탭으로 배너 안까지 들어간다 (본문 바로가기 → 브랜드 → 배너 안)
+  await page.keyboard.press("Tab");
+  for (let i = 0; i < 12; i += 1) {
+    if (await banner.evaluate((root) => root.contains(document.activeElement))) break;
+    await page.keyboard.press("Tab");
+  }
+  expect(
+    await banner.evaluate((root) => root.contains(document.activeElement)),
+  ).toBe(true);
+
+  const held = await shown();
+  await page.waitForTimeout(6_500);
+  expect(await shown()).toBe(held);
 });

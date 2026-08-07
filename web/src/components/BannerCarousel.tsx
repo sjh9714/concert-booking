@@ -52,19 +52,27 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
   const [index, setIndex] = useState(1);
   const [animate, setAnimate] = useState(true);
   const [stopped, setStopped] = useState(false);
-  const [held, setHeld] = useState(false);
+  const [keyboardFocus, setKeyboardFocus] = useState(false);
   const [hidden, setHidden] = useState(false);
 
   const current = ((index - 1) % total + total) % total;
   /*
-   * 정지 버튼을 눌렀거나, 마우스를 올렸거나, 포커스가 안에 들어와 있거나,
-   * 탭이 배경으로 갔으면 멈춘다.
+   * 멈추는 경우는 셋이다: 정지 버튼, 키보드 포커스가 안에 들어옴, 탭이 배경으로 감.
+   *
+   * **마우스를 올렸다고 멈추지 않는다.** 배너가 full-bleed로 화면 위쪽을 통째로 덮어서
+   * 포인터가 그냥 거기 놓여 있는 일이 잦다 — 그때마다 멈추면 "가끔 안 넘어간다"로 느껴진다.
+   * 실제로 그렇게 보고를 받았고, 재 보니 원인이 호버였다. 멈추고 싶은 사람을 위해서는
+   * 눈에 보이는 정지 버튼이 있다(NOL에는 그것이 없다).
+   *
+   * 키보드 포커스만 멈추는 것도 이유가 있다. 탭으로 들어온 사람은 읽고 고르는 중이라
+   * 화면이 바뀌면 곤란하다. 마우스로 썸네일을 누른 것은 그런 상태가 아니므로
+   * `:focus-visible`로 둘을 가른다.
    *
    * 배경 탭을 멈추는 것이 특히 중요하다. 배경에서는 CSS 전환이 아예 돌지 않는데
    * setInterval은 계속 뛴다 — 실제로 탭을 두고 다른 일을 하다 돌아왔더니
    * 인덱스가 14까지 가서 배너가 화면 밖으로 나가 있었다.
    */
-  const paused = stopped || held || hidden;
+  const paused = stopped || keyboardFocus || hidden;
 
   useEffect(() => {
     const onVisibility = () => setHidden(document.hidden);
@@ -121,10 +129,11 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
       className="banner"
       aria-roledescription="carousel"
       aria-label="추천 공연"
-      onMouseEnter={() => setHeld(true)}
-      onMouseLeave={() => setHeld(false)}
-      onFocus={() => setHeld(true)}
-      onBlur={() => setHeld(false)}
+      onFocus={(event) => {
+        // 마우스로 누른 포커스는 멈추지 않는다. 탭으로 옮겨온 것만 멈춘다.
+        if (event.target.matches(":focus-visible")) setKeyboardFocus(true);
+      }}
+      onBlur={() => setKeyboardFocus(false)}
     >
       <ul
         className="banner-track"
