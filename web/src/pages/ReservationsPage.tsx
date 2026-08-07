@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { ErrorState, LoadingState } from "../components/AsyncState";
+import { Poster } from "../components/Poster";
 import { apiFetch } from "../lib/api";
 import { concertDate, currency, dateTime } from "../lib/format";
 import { reservationListSchema } from "../lib/contracts";
@@ -40,8 +41,12 @@ export function ReservationsPage() {
       <section className="reservation-list" aria-label="예매 목록">
         {reservations.data?.map((reservation) => (
           <Link to={`/reservations/${reservation.id}`} className="reservation-row" key={reservation.id}>
-            <span className={`status-label ${reservation.status.toLowerCase()}`}>{STATUS[reservation.status]}</span>
+            {/* 티켓은 포스터로 알아본다. 전에는 글자만 있어서 어느 공연인지 읽어야 알았다 */}
+            <div className="reservation-thumb">
+              <Poster title={reservation.concertTitle ?? ""} />
+            </div>
             <div>
+              <span className={`status-label ${reservation.status.toLowerCase()}`}>{STATUS[reservation.status]}</span>
               <h2>{reservation.concertTitle ?? `예매 #${reservation.id}`}</h2>
               <p>
                 {reservation.venue ?? "공연장 정보는 상세에서 확인하세요."}
