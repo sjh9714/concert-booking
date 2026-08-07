@@ -56,7 +56,8 @@ public class ConcertService {
             throw new BadRequestException("해당 콘서트의 스케줄이 아닙니다.");
         }
 
-        List<Seat> seats = seatRepository.findByScheduleId(scheduleId);
+        List<Seat> seats =
+                seatRepository.findByScheduleIdOrderBySectionAscRowNumberAscSeatNumberAsc(scheduleId);
         return seats.stream()
                 .map(SeatResponse::from)
                 .toList();

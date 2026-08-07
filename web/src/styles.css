@@ -392,19 +392,22 @@ button:disabled { cursor: not-allowed; }
 
 .queue-actions p { margin: 0; color: #8e8882; font-size: .8rem; }
 
-.seat-page-heading { padding: 34px 4vw 42px; display: grid; grid-template-columns: 1fr auto; align-items: end; border-bottom: 1px solid var(--line); }
+/* 좌석 화면은 둘러보는 화면이 아니라 거래하는 화면이다.
+   포스터 활자(최대 96px)는 목록·상세의 것이고, 여기서는 좌석표가 주인공이라
+   머리글을 한 줄로 접는다. 전에는 제목만으로 화면 절반을 먹어 좌석표가 잘렸다. */
+.seat-page-heading { padding: 20px 4vw 18px; display: grid; grid-template-columns: 1fr auto; align-items: end; border-bottom: 1px solid var(--line); }
 
-.seat-page-heading .back-link { grid-column: 1 / -1; margin-bottom: 28px; }
+.seat-page-heading .back-link { grid-column: 1 / -1; margin-bottom: 12px; }
 
-.seat-page-heading h1 { margin: 0; font-size: clamp(3rem, 6vw, 6rem); letter-spacing: -.07em; }
+.seat-page-heading h1 { margin: 0 0 2px; font-size: clamp(1.5rem, 2.4vw, 2rem); letter-spacing: -.03em; }
 
 .seat-page-heading > div > p:last-child { display: flex; gap: 8px; align-items: center; color: var(--muted); }
 
-.seat-workspace { padding: 44px 4vw 160px; }
+.seat-workspace { padding: 28px 4vw 160px; }
 
-.stage { width: min(680px, 80vw); margin: 0 auto 72px; padding: 12px; border-top: 5px solid var(--ink); text-align: center; color: var(--muted); font-size: .7rem; letter-spacing: .24em; }
+.stage { width: min(680px, 80vw); margin: 0 auto 36px; padding: 12px; border-top: 5px solid var(--ink); text-align: center; color: var(--muted); font-size: .7rem; letter-spacing: .24em; }
 
-.seat-section { max-width: 940px; margin: 0 auto 56px; }
+.seat-section { max-width: 940px; margin: 0 auto 40px; }
 
 .seat-section-heading { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 
@@ -412,24 +415,33 @@ button:disabled { cursor: not-allowed; }
 
 .seat-section-heading span { color: var(--muted); font-size: .8rem; }
 
-.seat-row { display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: center; margin: 10px 0; }
+.seat-section-left { margin-left: auto; margin-right: 16px; font-variant-numeric: tabular-nums; }
 
-.row-label { color: var(--muted); font-size: .76rem; }
+/* 좌석표는 가로로 민다. 좁은 화면에서 열을 접으면 도면이 아니라 격자가 된다. */
+.seat-rows { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
 
-.seat-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 열 번호는 좁게. 좌석표에서 넓이는 공연장 넓이를 뜻하므로 라벨이 그걸 먹으면 안 된다 */
+.seat-row { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: center; margin: 4px 0; }
+
+.row-label { color: var(--muted); font-size: .68rem; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 줄바꿈하지 않는다. 한 열은 한 줄이어야 좌석표로 읽힌다 —
+   전에는 44px 좌석에 8px 간격이라 20석 열이 넘쳐 두 줄로 접혔다. */
+.seat-buttons { display: flex; flex-wrap: nowrap; gap: 4px; justify-content: center; width: max-content; margin: 0 auto; }
 
 /* 좌석은 모서리를 둥글리지 않는다. 상태는 색만으로 말하지 않는다 —
    선택함은 채움과 굵은 테두리를 함께 주고, 판매 완료는 취소선을 남긴다.
    aria-label에도 상태가 들어간다(SeatGrid.tsx). */
 .seat {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
+  /* 28px — 20석 열이 한 줄에 들어가면서 목표 크기 24px은 넘는 크기 */
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
   border: 1px solid var(--line);
   border-radius: 0;
   background: var(--white);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   /* 좌석 선택은 즉시 반응해야 한다. 늦게 반응하면 두 번 누른다.
@@ -437,19 +449,25 @@ button:disabled { cursor: not-allowed; }
   transition: transform 120ms var(--ease);
 }
 
-.seat:hover:not(:disabled) { transform: translateY(-3px); border-color: var(--ink); }
+.seat:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--ink); }
+
+/* 실제 공연장의 가운데 통로. 없으면 격자로만 보이고 어디가 가운데인지 읽히지 않는다 */
+.seat.after-aisle { margin-left: 18px; }
 
 .seat.selected {
   background: var(--ink);
   border: 2px solid var(--ink);
   color: var(--volt);
+  /* 28px에서 2px 테두리는 안쪽을 좁히므로 크기를 유지하도록 box-sizing에 기댄다 */
+  box-sizing: border-box;
 }
 
+/* 판매 완료는 숫자를 지운다. 28px에서 취소선은 읽히지 않고 얼룩으로 보인다.
+   대신 채움만 남겨 '여기는 없다'가 한눈에 보이게 한다. aria-label에는 '예매 완료'가 그대로 있다. */
 .seat.unavailable {
   background: var(--sold);
-  color: var(--white);
+  color: transparent;
   border-color: var(--sold);
-  text-decoration: line-through;
 }
 .seat.refreshing { opacity: .55; }
 
@@ -571,7 +589,7 @@ button:disabled { cursor: not-allowed; }
   .queue-focus strong { font-size: clamp(8rem, 46vw, 13rem); }
   .queue-actions { align-items: stretch; flex-direction: column; }
   .queue-actions .primary-button { width: 100%; }
-  .seat-page-heading { padding: 24px 20px 34px; display: block; }
+  .seat-page-heading { padding: 16px 20px 16px; display: block; }
   .seat-workspace { padding: 36px 20px 190px; overflow-x: hidden; }
   .stage { margin-bottom: 48px; }
   .seat-row { grid-template-columns: 34px minmax(0, 1fr); gap: 7px; }
