@@ -314,9 +314,6 @@ test("two browsers competing for one seat yield one winner and a recoverable los
 }, testInfo) => {
   skipMobile(testInfo.project.name);
   const target = await resetPrimarySchedule(request);
-  const contestedSeat = target.seats.find((seat) => seat.status === "AVAILABLE");
-  if (!contestedSeat) throw new Error("No available e2e seat.");
-  const contestedLabel = `${contestedSeat.section} ${contestedSeat.rowNumber}열 ${contestedSeat.seatNumber}번`;
   const [firstAuth, secondAuth] = await Promise.all([
     createUser(request, "race-a"),
     createUser(request, "race-b"),
@@ -333,6 +330,19 @@ test("two browsers competing for one seat yield one winner and a recoverable los
     await Promise.all([first.page.goto(seatsPath), second.page.goto(seatsPath)]);
     const firstSeat = first.page.getByRole("button", { name: /선택 가능/ }).first();
     const sameFirstSeat = second.page.getByRole("button", { name: /선택 가능/ }).first();
+
+    /*
+     * 다투는 좌석은 **화면에서** 읽는다. 예전에는 API 목록의 첫 AVAILABLE을 썼는데,
+     * 좌석표가 구역을 무대와 가까운 순(비싼 순)으로 그리기 시작하면서
+     * API 순서(구역 이름순)와 화면 순서가 갈렸다. 두 브라우저는 화면의 첫 좌석을 누르므로
+     * API에서 고른 좌석과 다른 자리를 다투게 된다.
+     *
+     * 사용자가 실제로 누른 좌석을 보는 편이 이 테스트의 뜻에도 맞는다.
+     */
+    const contestedLabel = (await firstSeat.getAttribute("aria-label"))?.split(",")[0];
+    if (!contestedLabel) throw new Error("Could not read the contested seat label.");
+    expect(await sameFirstSeat.getAttribute("aria-label")).toContain(contestedLabel);
+
     await Promise.all([firstSeat.click(), sameFirstSeat.click()]);
     await Promise.all([
       first.page.getByRole("button", { name: "이 좌석으로 예매" }).click(),
@@ -429,8 +439,31 @@ test("lost queue-token response is replayed and duplicate reservation keys retur
   }, target.schedule.id);
   expect(replayedToken?.token).toBe(lostToken?.token);
 
-  const availableSeat = target.seats.find((seat) => seat.status === "AVAILABLE");
-  if (!availableSeat || !replayedToken) throw new Error("No available e2e seat or queue token.");
+  if (!replayedToken) throw new Error("No queue token.");
+
+  /*
+   * 좌석을 **화면에서 먼저 고르고** 그 좌석으로 멱등성 키를 심는다.
+   *
+   * 예전에는 API 목록의 첫 AVAILABLE을 썼는데, 좌석표가 구역을 무대와 가까운 순으로
+   * 그리기 시작하면서 API 순서(구역 이름순)와 화면 순서가 갈렸다. 그러면 브라우저가 누르는
+   * 좌석과 키를 심어 둔 좌석이 달라져, 같은 예약이 아니라 서로 다른 예약 두 건이 된다.
+   * 큐 토큰은 한 번만 쓸 수 있으므로 뒤에 온 쪽이 INVALID_QUEUE_TOKEN으로 떨어졌다.
+   *
+   * 이 테스트가 확인하려는 것은 "같은 멱등성 키로 두 번 요청해도 예약은 하나"이므로
+   * 두 요청이 같은 좌석을 가리키는 것이 전제다.
+   */
+  const seatButton = page.getByRole("button", { name: /선택 가능/ }).first();
+  const seatLabel = (await seatButton.getAttribute("aria-label")) ?? "";
+  const [, section, row, number] =
+    seatLabel.match(/^(\S+) (\d+)열 (\d+)번,/) ?? [];
+  const availableSeat = target.seats.find(
+    (seat) =>
+      seat.section === section &&
+      seat.rowNumber === Number(row) &&
+      seat.seatNumber === Number(number),
+  );
+  if (!availableSeat) throw new Error(`Could not match the clicked seat: ${seatLabel}`);
+
   const idempotency = crypto.randomUUID();
   await page.evaluate(
     ({ scheduleId, seatId, key }) => {
@@ -445,7 +478,7 @@ test("lost queue-token response is replayed and duplicate reservation keys retur
       key: idempotency,
     },
   );
-  await page.getByRole("button", { name: /선택 가능/ }).first().click();
+  await seatButton.click();
 
   const browserResponse = page.waitForResponse(
     (response) =>

@@ -17,6 +17,13 @@ export const concertSchema = z.object({
   description: z.string().nullable().optional().transform((value) => value ?? ""),
   venue: z.string(),
   artist: z.string(),
+  // 회차 요약. 목록에서 언제 하는지와 자리가 남았는지를 말하려면 필요하다.
+  // 회차가 없는 공연도 있을 수 있어 날짜는 null을 받는다.
+  nextScheduleDate: z.string().nullable().optional(),
+  lastScheduleDate: z.string().nullable().optional(),
+  scheduleCount: z.number().optional().default(0),
+  availableSeats: z.number().optional().default(0),
+  totalSeats: z.number().optional().default(0),
 });
 
 export const concertListSchema = z.array(concertSchema);
