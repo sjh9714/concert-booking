@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { FetchEventSourceInit } from "@microsoft/fetch-event-source";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -40,13 +41,25 @@ type StreamAttempt = {
   resolve: () => void;
 };
 
+/*
+ * 대기실이 "무엇을 기다리는지"(공연명·회차)를 보여주면서 react-query를 쓰게 됐다.
+ * 그 조회는 대기열과 무관하고 실패해도 화면은 그대로 돌지만, 제공자는 있어야 한다.
+ *
+ * 재시도를 끈다 — 이 테스트에서 공연 조회는 어차피 붙지 않고,
+ * 켜 두면 실패한 조회가 배경에서 계속 돌아 테스트가 느려진다.
+ */
 function renderQueue(): void {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <MemoryRouter initialEntries={["/queue/10?concert=1"]}>
-      <Routes>
-        <Route path="/queue/:scheduleId" element={<QueuePage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/queue/10?concert=1"]}>
+        <Routes>
+          <Route path="/queue/:scheduleId" element={<QueuePage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -62,11 +75,32 @@ function openStream(options: FetchEventSourceInit): Promise<void> {
 describe("QueuePage SSE lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.apiFetch.mockResolvedValue({
-      status: "READY",
-      position: 1,
-      totalWaiting: 1,
-      serverTime: new Date().toISOString(),
+    /*
+     * 경로마다 다른 것을 돌려준다. 전에는 무엇을 물어도 대기열 응답을 돌려줬는데,
+     * 대기실이 공연·회차도 조회하게 되면서 회차 목록 자리에 객체가 와
+     * `.find`가 함수가 아니라는 오류가 났다. 진짜 apiFetch는 스키마로 검증하므로
+     * 이런 응답이 나올 수 없다 — mock이 실제와 달랐던 것이다.
+     */
+    mocks.apiFetch.mockImplementation((path: string) => {
+      if (path.includes("/schedules")) return Promise.resolve([]);
+      if (path.startsWith("/api/concerts/")) {
+        return Promise.resolve({
+          id: 1,
+          title: "종이비행기",
+          venue: "마포아트센터 아트홀",
+          artist: "이한결",
+          description: "",
+          scheduleCount: 0,
+          availableSeats: 0,
+          totalSeats: 0,
+        });
+      }
+      return Promise.resolve({
+        status: "READY",
+        position: 1,
+        totalWaiting: 1,
+        serverTime: new Date().toISOString(),
+      });
     });
   });
 
