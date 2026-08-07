@@ -5,7 +5,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { ErrorState, LoadingState } from "../components/AsyncState";
 import { apiFetch } from "../lib/api";
-import { countdown, countdownLabel, currency, dateTime, seatLabel } from "../lib/format";
+import { concertDate, countdown, countdownLabel, currency, dateTime, seatLabel } from "../lib/format";
 import { paymentSchema, reservationDetailSchema } from "../lib/contracts";
 import { clearIdempotencyKey, idempotencyKey } from "../lib/session";
 
@@ -106,7 +106,9 @@ export function ReservationPage() {
           <h2 id="reservation-detail-title">{data.concertTitle}</h2>
           <p><MapPin aria-hidden="true" /> {data.venue}</p>
           {data.scheduleDate && (
-            <p>{data.scheduleDate} {data.startTime}</p>
+            // 원본 형식(2026-08-28 20:00:00)이 그대로 나오고 있었다.
+            // 티켓에 적히는 날짜는 사람이 읽는 형식이어야 한다.
+            <p>{concertDate(data.scheduleDate, data.startTime)}</p>
           )}
         </div>
         <dl>

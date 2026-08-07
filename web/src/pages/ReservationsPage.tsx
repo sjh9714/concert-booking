@@ -4,7 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { ErrorState, LoadingState } from "../components/AsyncState";
 import { apiFetch } from "../lib/api";
-import { currency, dateTime } from "../lib/format";
+import { concertDate, currency, dateTime } from "../lib/format";
 import { reservationListSchema } from "../lib/contracts";
 
 const STATUS = {
@@ -43,9 +43,20 @@ export function ReservationsPage() {
             <span className={`status-label ${reservation.status.toLowerCase()}`}>{STATUS[reservation.status]}</span>
             <div>
               <h2>{reservation.concertTitle ?? `예매 #${reservation.id}`}</h2>
-              <p>{reservation.venue ?? "공연장 정보는 상세에서 확인하세요."}</p>
+              <p>
+                {reservation.venue ?? "공연장 정보는 상세에서 확인하세요."}
+                {/* 좌석은 티켓의 알맹이다. 목록에서 빠져 있으면 어느 자리를 샀는지
+                    상세로 들어가야만 알 수 있다. */}
+                {reservation.seatLabels?.length ? ` · ${reservation.seatLabels.join(", ")}` : ""}
+              </p>
             </div>
-            <time dateTime={reservation.createdAt}>{dateTime(reservation.createdAt)}</time>
+            {/* 예약한 시각이 아니라 공연 날짜를 보여준다.
+                티켓 목록에서 알아야 하는 건 '언제 가는지'다. */}
+            <time dateTime={reservation.scheduleDate ?? reservation.createdAt}>
+              {reservation.scheduleDate
+                ? concertDate(reservation.scheduleDate, reservation.startTime)
+                : dateTime(reservation.createdAt)}
+            </time>
             <strong>{currency(reservation.totalAmount)}</strong>
             <ArrowRight aria-hidden="true" />
           </Link>
