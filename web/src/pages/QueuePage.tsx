@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { Poster } from "../components/Poster";
 import { useQueueStream } from "../hooks/useQueueStream";
 import { apiFetch } from "../lib/api";
-import { queuePositionSchema, queueTokenSchema, type QueuePosition } from "../lib/contracts";
+import { concertDate } from "../lib/format";
+import {
+  concertSchema,
+  queuePositionSchema,
+  queueTokenSchema,
+  scheduleListSchema,
+  type QueuePosition,
+} from "../lib/contracts";
 import { writeQueueToken } from "../lib/session";
 
 /**
@@ -23,6 +32,23 @@ export function QueuePage() {
   const { session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  /*
+   * 무엇을 기다리는지 화면에 적는다. 전에는 순번만 있어서 어느 공연의 대기열인지
+   * 알 수 없었다 — 탭을 두고 자리를 비웠다 돌아오면 더 그렇다.
+   * 대기열 자체와는 무관하므로 실패해도 화면은 그대로 돈다.
+   */
+  const concert = useQuery({
+    queryKey: ["concert", Number(concertId)],
+    queryFn: () => apiFetch(`/api/concerts/${concertId}`, { schema: concertSchema }),
+    enabled: Boolean(concertId),
+  });
+  const schedules = useQuery({
+    queryKey: ["concert", Number(concertId), "schedules"],
+    queryFn: () => apiFetch(`/api/concerts/${concertId}/schedules`, { schema: scheduleListSchema }),
+    enabled: Boolean(concertId),
+  });
+  const showing = schedules.data?.find((item) => item.id === schedule);
 
   const [entered, setEntered] = useState<QueuePosition | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +141,21 @@ export function QueuePage() {
               : "연결 중"}
         </span>
       </div>
+
+      {concert.data && (
+        <div className="queue-show">
+          <div className="queue-show-thumb">
+            <Poster title={concert.data.title} />
+          </div>
+          <div>
+            <strong>{concert.data.title}</strong>
+            <p>
+              {concert.data.venue}
+              {showing ? ` · ${concertDate(showing.scheduleDate, showing.startTime)}` : ""}
+            </p>
+          </div>
+        </div>
+      )}
 
       <section className="queue-focus" aria-live="polite">
         <span className="label">현재 내 순서</span>

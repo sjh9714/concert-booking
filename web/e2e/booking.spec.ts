@@ -220,7 +220,7 @@ function skipMobile(projectName: string): void {
 test("catalog is accessible and opens a concert", async ({ page }) => {
   const clientErrors = captureClientErrors(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("좋은 자리를");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("예매 중인 공연");
   const menu = page.getByRole("button", { name: "메뉴 열기" });
   if (await menu.isVisible()) {
     await menu.click();
@@ -228,7 +228,7 @@ test("catalog is accessible and opens a concert", async ({ page }) => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeHidden();
   }
-  const firstConcert = page.locator(".concert-row").first();
+  const firstConcert = page.locator(".concert-card").first();
   await expect(firstConcert).toBeVisible();
   await firstConcert.click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -280,7 +280,7 @@ test("user can reserve and complete a demo payment", async ({ page, request }) =
   await page.getByLabel("비밀번호").fill("password123!");
   await page.getByRole("button", { name: "가입하고 시작" }).click();
 
-  await page.locator(".concert-row").first().click();
+  await page.locator(".concert-card").first().click();
   await page.getByRole("button", { name: /예매하기/ }).first().click();
   await expect(page.getByText(/현재 내 순서/)).toBeVisible();
   await page.getByRole("button", { name: "좌석 선택으로 입장" }).click();

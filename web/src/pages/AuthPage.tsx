@@ -49,10 +49,18 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <main id="main-content" className="auth-layout">
+      {/*
+       * 장식 면이라 낭독하지 않는다 — 로그인 화면의 내용은 오른쪽 양식이다.
+       * 전에는 여기에 형광 "01"이 320px로 서 있었다. 예매 서비스의 로그인 화면에
+       * 거대한 번호가 있을 이유가 없어, 이 서비스가 지키는 것 세 가지로 바꿨다.
+       */}
       <section className="auth-context" aria-hidden="true">
         <p className="eyebrow">TICKETLINE</p>
-        <p className="auth-number">{mode === "login" ? "01" : "02"}</p>
-        <p>대기 순서부터 결제 확정까지<br />한 번의 세션으로 이어집니다.</p>
+        <ul className="auth-promises">
+          <li>들어온 순서대로 입장합니다</li>
+          <li>고른 좌석은 결제까지 잠가 둡니다</li>
+          <li>같은 자리가 두 번 팔리지 않습니다</li>
+        </ul>
       </section>
       <section className="auth-form-wrap">
         <p className="eyebrow">{mode === "login" ? "다시 오신 것을 환영합니다" : "첫 예매 준비"}</p>

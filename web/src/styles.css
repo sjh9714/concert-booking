@@ -1,9 +1,12 @@
 /*
  * 값의 기준은 DESIGN.md다. 여기 없는 색·크기를 화면에서 즉석으로 만들지 않는다.
  *
- * 공연 티켓은 포스터다 — 한 장면이 크게 서고 나머지가 작게 붙는다.
- * DICE.fm 실측(2026-08-07): 색은 사실상 흑백(검정 1,433 · 흰색 572),
- * 디스플레이 106px, 라벨 12px/700/자간 0.72px, 액센트는 형광색 하나.
+ * 기준을 NOL 티켓·예스24 티켓 실측으로 옮겼다(2026-08-07). 전에는 DICE.fm이었는데
+ * DICE는 지정석을 파는 서비스가 아니다. 좌석을 고르고 돈을 내는 화면에 공연 소개
+ * 사이트의 언어(96px 활자·각진 면·형광 액센트)를 씌워 놓았던 것이다.
+ *
+ * 실측: 최대 제목 28px(NOL)·25px(예스24), 본문 12·13·15·17px, 굵기는 400/700 두 단계,
+ * 포스터 비율 0.753·0.71, 모서리 8px, 배경 흰색, 이미지 91개·118개.
  */
 :root {
   font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont,
@@ -29,30 +32,63 @@
 
   --header-height: 72px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /*
+   * 활자 크기. 실측한 두 서비스 모두 가장 큰 글자가 28px이었다.
+   * 우리는 96px이었다 — 그 한 가지가 "예매 서비스"와 "포트폴리오"를 갈랐다.
+   *
+   * 화면에서 clamp()를 새로 쓰지 않는다. 여기 없는 크기가 필요하면
+   * 그건 대개 크기가 아니라 배치 문제다.
+   */
+  --fs-page: 28px;   /* 페이지·섹션 제목. 가장 큰 글자 */
+  --fs-sub: 20px;    /* 하위 제목 */
+  --fs-title: 17px;  /* 카드 제목 */
+  --fs-body: 15px;
+  --fs-small: 13px;
+  --fs-label: 12px;
+  --fs-badge: 11px;
+
+  /*
+   * 사람이 응시하는 숫자 — 대기 순번과 남은 시간.
+   * 이건 제목이 아니라 계기판이라 28px 규칙을 따르지 않는다. 전에는 384px이었다.
+   */
+  --fs-focus: clamp(56px, 11vw, 72px);
+
+  /* NOL 실측: 8px 73회 · 6px 65회. 우리는 0이었다 — 각진 면이 거래 화면을 딱딱하게 만들었다 */
+  --radius: 8px;
+  --radius-sm: 6px;
+
+  /*
+   * 본문 폭. 전에는 4vw 여백뿐이라 1440px 화면에서 본문이 1330px까지 늘어났다.
+   * 좁은 화면에서는 4vw가 이기고, 넓어지면 1200px에서 멈추고 가운데로 온다.
+   * 머리글·바닥글까지 같은 값을 쓴다 — 한 곳만 다르면 세로선이 어긋난다.
+   */
+  --gutter: max(4vw, calc((100% - 1200px) / 2));
 }
 
 :root { --success: #1f6b4f; }
 
 /* ── 타이포 스케일 (DESIGN.md 표) ─────────────────────────── */
 
+/* 대기 순번처럼 응시하는 숫자에만. 제목에는 쓰지 않는다 */
 .display {
-  font-size: clamp(56px, 11vw, 128px);
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 0.86;
-  margin: 0;
-}
-
-.headline {
-  font-size: clamp(28px, 4vw, 44px);
-  font-weight: 800;
+  font-size: var(--fs-focus);
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
   margin: 0;
 }
 
+.headline {
+  font-size: var(--fs-page);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
 .label {
-  font-size: 12px;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -91,6 +127,7 @@ button:disabled { cursor: not-allowed; }
   left: 8px;
   z-index: 100;
   padding: 12px 16px;
+  border-radius: var(--radius);
   background: var(--white);
   border: 1px solid var(--ink);
   transform: translateY(-160%);
@@ -105,7 +142,7 @@ button:disabled { cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4vw;
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--line);
   background: rgba(243, 240, 234, 0.96);
 }
@@ -118,7 +155,7 @@ button:disabled { cursor: not-allowed; }
 
 .nav a.active { color: var(--ink); text-decoration: underline; text-underline-offset: 7px; }
 
-.nav-login { padding: 0 18px; background: var(--ink); color: var(--white) !important; }
+.nav-login { padding: 0 18px; border-radius: 999px; background: var(--ink); color: var(--white) !important; }
 
 .nav-user { color: var(--muted); }
 
@@ -145,8 +182,8 @@ button:disabled { cursor: not-allowed; }
 .correctness-dialog::backdrop { background: rgba(24, 22, 20, .58); }
 
 .correctness-heading { display: grid; grid-template-columns: 1fr 44px; gap: 24px; align-items: start; }
-.correctness-heading h2 { margin: 0; font-size: clamp(2.4rem, 5vw, 4.5rem); line-height: .96; letter-spacing: -.065em; }
-.drawer-close { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+.correctness-heading h2 { margin: 0; font-size: var(--fs-page); font-weight: 700; line-height: 1.2; letter-spacing: -.02em; }
+.drawer-close { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--ink); }
 .correctness-intro { margin: 30px 0 42px; max-width: 460px; color: var(--muted); line-height: 1.65; }
 .correctness-list { margin: 0; padding: 0; list-style: none; }
 .correctness-list li { display: grid; grid-template-columns: 42px 1fr; gap: 18px; padding: 24px 0; border-top: 1px solid var(--line); }
@@ -160,74 +197,118 @@ button:disabled { cursor: not-allowed; }
    글자색은 그 면이 정하고, 여기서는 크기와 자간만 정한다. */
 .eyebrow { margin: 0 0 16px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
-.catalog-intro {
-  min-height: calc(78svh - var(--header-height));
+/*
+ * 히어로가 없다. 전에는 표어가 78svh를 먹어 사이트를 열면 공연이 하나도 안 보였다.
+ * 실측한 두 서비스 모두 목록 위에 홍보 문구를 두지 않는다.
+ */
+.catalog-list, .schedule-list, .reservation-list { padding: 44px var(--gutter) 96px; }
+
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+
+.section-heading h1 { margin: 0; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+
+.section-heading .eyebrow { flex-basis: 100%; }
+
+.section-heading h2 { margin: 0; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+
+.section-heading > span { color: var(--muted); font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+
+/* ── 공연 카드 격자 ────────────────────────────────────────
+   실측한 두 서비스 모두 목록이 포스터 격자였다. 우리는 세로 텍스트 목록이었고
+   이미지가 하나도 없었다. gap 20px은 NOL 실측값이다. */
+.concert-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 32px 20px;
+}
+
+.concert-card { display: block; }
+
+/* 포스터만 움직인다. 카드 전체를 띄우면 격자가 출렁인다 */
+.concert-card:hover .poster img { transform: scale(1.03); }
+.concert-card:hover .concert-card-title { text-decoration: underline; text-underline-offset: 3px; }
+
+.concert-card-body { padding-top: 12px; display: grid; gap: 4px; justify-items: start; }
+
+.concert-card-title {
+  font-size: var(--fs-title);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -.01em;
+  /* 두 줄까지. 세 줄이 되면 카드 높이가 제각각이라 격자가 어긋난다 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.catalog-copy { padding: clamp(64px, 8vw, 132px) 4vw 72px; align-self: center; }
+/* 공연장은 검정이다. 실측한 두 서비스 모두 장소를 본문 색으로 뒀다 —
+   어디서 하는지는 고르는 데 필요한 정보지 부연이 아니다. */
+.concert-card-venue { margin: 0; font-size: var(--fs-body); color: var(--ink); }
 
-.catalog-copy h1 {
-  max-width: 760px;
-  margin: 0;
-  font-size: clamp(3.2rem, 7vw, 7.7rem);
-  line-height: .92;
-  letter-spacing: -.075em;
-  animation: rise-in .65s cubic-bezier(.2,.8,.2,1) both;
+.concert-card-when { margin: 0; font-size: var(--fs-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ── 포스터 ────────────────────────────────────────────────
+   3:4. 사진 위에 공연명을 활자로 얹는다(Poster.tsx). */
+.poster {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #1a1a1a;
+  aspect-ratio: 3 / 4;
 }
 
-.intro-copy { max-width: 460px; margin: 36px 0 0; color: var(--muted); font-size: clamp(1rem, 1.4vw, 1.2rem); line-height: 1.65; }
+.poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 320ms var(--ease);
+}
 
-.venue-mark { position: relative; overflow: hidden; background: var(--ink); color: var(--white); padding: 38px; display: grid; grid-template-rows: auto 1fr auto; }
+.poster-blank { width: 100%; height: 100%; background: #1a1a1a; }
 
-.venue-mark > span { font-size: .8rem; letter-spacing: .16em; }
-
-.venue-mark small { justify-self: end; letter-spacing: .16em; }
-
-.venue-ring { width: min(38vw, 480px); aspect-ratio: 1; border: 1px solid #6d6760; border-radius: 50%; place-self: center; display: grid; place-items: center; animation: slow-turn 22s linear infinite; }
-
-.venue-ring::before, .venue-ring::after { content: ""; position: absolute; width: 62%; height: 1px; background: #6d6760; }
-
-.venue-ring::after { transform: rotate(90deg); }
-
-.venue-ring i { display: block; width: 38%; aspect-ratio: 1; border-radius: 50%; background: var(--ink); }
-
-.catalog-list, .schedule-list, .reservation-list { padding: clamp(64px, 8vw, 110px) 4vw; }
-
-.section-heading { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-bottom: 34px; }
-
-.section-heading .eyebrow { grid-column: 1 / -1; }
-
-.section-heading h2 { margin: 0; font-size: clamp(2.6rem, 5vw, 5rem); letter-spacing: -.06em; line-height: 1; }
-
-.section-heading > span { font-size: 1.2rem; color: var(--muted); }
-
-.concert-row {
+/* 사진 아래쪽을 어둡게 깔아야 활자가 읽힌다. 사진마다 밝기가 달라
+   그라디언트 없이 얹으면 어떤 포스터에서는 글자가 사라진다. */
+.poster-type {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 40px 14px 14px;
   display: grid;
-  grid-template-columns: 52px minmax(240px, 1.4fr) minmax(200px, .8fr) 32px;
-  gap: 24px;
-  align-items: center;
-  min-height: 126px;
-  border-top: 1px solid var(--line);
-  transition: transform .2s ease, background-color .2s ease;
+  gap: 3px;
+  background: linear-gradient(to top, rgba(0, 0, 0, .82), rgba(0, 0, 0, 0));
+  color: var(--white);
+  pointer-events: none;
 }
 
-.concert-row:last-child { border-bottom: 1px solid var(--line); }
+.poster-artist { font-size: var(--fs-badge); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 255, 255, .82); }
 
-.concert-row:hover { transform: translateX(8px); background: var(--white); }
+.poster-title { font-size: var(--fs-title); font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
 
-.concert-index { color: var(--muted); font-variant-numeric: tabular-nums; }
+.poster-480 .poster-type { padding: 64px 20px 20px; }
+.poster-480 .poster-title { font-size: var(--fs-sub); }
 
-.concert-primary span { display: block; color: var(--ink); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+/* ── 상태 배지 ────────────────────────────────────────────
+   색만으로 말하지 않는다 — 글자가 상태를 그대로 적는다. */
+.badge {
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-badge);
+  font-weight: 700;
+  line-height: 1.4;
+}
 
-.concert-primary h3 { margin: 7px 0 0; font-size: clamp(1.45rem, 2.5vw, 2.6rem); letter-spacing: -.04em; }
+.badge.open { background: #eaf1ff; color: #1b4fa8; }
+.badge.low { background: #fff1e2; color: #8a4a06; }
+/* --muted(#6b6862)를 그대로 쓰면 이 배경 위에서 4.4:1이라 11px 글자에 모자란다.
+   배지 안에서만 한 단계 어둡게 쓴다. */
+.badge.soldout { background: #efeeec; color: #56524c; }
 
-.concert-row > p { color: var(--muted); }
-
-.site-footer { min-height: 160px; padding: 44px 4vw; display: flex; justify-content: space-between; align-items: flex-end; background: var(--ink); color: var(--white); }
+.site-footer { min-height: 160px; padding: 44px var(--gutter); display: flex; justify-content: space-between; align-items: flex-end; background: var(--ink); color: var(--white); }
 
 .site-footer span { font-weight: 850; letter-spacing: .08em; }
 
@@ -237,9 +318,9 @@ button:disabled { cursor: not-allowed; }
 
 .loading-mark { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; }
 
-.error-state, .not-found { min-height: calc(100svh - var(--header-height)); padding: 14vh 4vw; }
+.error-state, .not-found { min-height: calc(100svh - var(--header-height)); padding: 14vh var(--gutter); }
 
-.error-state h1, .not-found h1 { max-width: 800px; margin: 0 0 24px; font-size: clamp(3rem, 7vw, 7rem); line-height: .95; letter-spacing: -.07em; }
+.error-state h1, .not-found h1 { max-width: 800px; margin: 0 0 24px; font-size: var(--fs-page); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; }
 
 /* 알약형 · 12px/700/자간 0.08em — DICE 실측을 따랐다.
    이름은 그대로 두고 정의만 바꿨다. 21곳의 호출부를 건드릴 이유가 없다. */
@@ -308,15 +389,18 @@ button:disabled { cursor: not-allowed; }
 
 .auth-layout { min-height: calc(100svh - var(--header-height)); display: grid; grid-template-columns: 1fr 1fr; }
 
-.auth-context { background: var(--ink); color: var(--white); padding: 5vw; display: grid; grid-template-rows: auto 1fr auto; }
+.auth-context { background: var(--ink); color: var(--white); padding: 5vw; display: grid; grid-template-rows: auto 1fr; }
 
-.auth-number { margin: 0; align-self: center; font-size: clamp(9rem, 22vw, 20rem); line-height: .7; font-weight: 900; color: var(--volt); letter-spacing: -.1em; }
+/* 액센트는 한 곳에만. 여기서는 각 줄 앞의 표시가 그 자리다 */
+.auth-promises { margin: 0; padding: 0; align-self: center; list-style: none; display: grid; gap: 18px; }
 
-.auth-context > p:last-child { color: #b9b2aa; line-height: 1.7; }
+.auth-promises li { display: grid; grid-template-columns: 18px 1fr; gap: 14px; align-items: baseline; font-size: var(--fs-sub); line-height: 1.45; letter-spacing: -.01em; }
+
+.auth-promises li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--volt); transform: translateY(-2px); }
 
 .auth-form-wrap { max-width: 560px; width: 100%; padding: clamp(56px, 8vw, 120px); align-self: center; }
 
-.auth-form-wrap h1 { margin: 0 0 40px; font-size: clamp(3rem, 5vw, 5.5rem); letter-spacing: -.07em; }
+.auth-form-wrap h1 { margin: 0 0 32px; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; }
 
 .auth-form { display: grid; gap: 24px; }
 
@@ -333,27 +417,33 @@ button:disabled { cursor: not-allowed; }
 
 .detail-page, .seats-page, .reservation-page, .reservations-page { min-height: calc(100svh - var(--header-height)); }
 
-.detail-page { padding: 34px 4vw 100px; }
+.detail-page { padding: 34px var(--gutter) 100px; }
 
 .back-link { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
 
-.concert-hero { min-height: 52vh; padding: 70px 0; display: grid; grid-template-columns: 1.25fr .75fr; gap: 8vw; align-items: end; border-bottom: 1px solid var(--line); }
+/* 포스터 왼쪽 · 정보 오른쪽 — 실측한 두 서비스의 공통 구조 */
+.concert-hero { padding: 28px 0 36px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 36px; align-items: start; border-bottom: 1px solid var(--line); }
 
-.concert-hero h1 { max-width: 900px; margin: 0 0 28px; font-size: clamp(3.7rem, 8vw, 8.4rem); line-height: .88; letter-spacing: -.075em; }
+.concert-hero h1 { max-width: 720px; margin: 4px 0 20px; font-size: var(--fs-page); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; }
 
-.concert-hero > div:first-child > p:last-child { max-width: 620px; color: var(--muted); line-height: 1.7; }
+/* 고르기 전에 알아야 하는 것들. 이름 열을 고정해야 값이 세로로 줄을 맞춘다 */
+.concert-facts { margin: 0; border-top: 1px solid var(--line); }
 
-.venue-block { min-height: 220px; padding: 28px; display: grid; grid-template-rows: 1fr auto auto; background: var(--ink); color: var(--white); }
+.concert-facts > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line); }
 
-.venue-block span { color: #aaa39b; font-size: .7rem; letter-spacing: .14em; }
+.concert-facts dt { color: var(--muted); font-size: var(--fs-body); }
 
-.venue-block strong { margin-top: 6px; font-size: 1.2rem; }
+.concert-facts dd { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--fs-body); font-variant-numeric: tabular-nums; }
+
+.concert-facts dd svg { flex: none; color: var(--muted); }
+
+.concert-desc { max-width: 620px; margin: 20px 0 0; color: var(--muted); font-size: var(--fs-body); line-height: 1.7; }
 
 .schedule-list { padding-left: 0; padding-right: 0; }
 
 .section-heading.compact { display: block; }
 
-.schedule-row { width: 100%; min-height: 98px; display: grid; grid-template-columns: 1.2fr .8fr .55fr 30px; gap: 24px; align-items: center; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; }
+.schedule-row { width: 100%; min-height: 72px; font-size: var(--fs-body); display: grid; grid-template-columns: 1.2fr .8fr .55fr 30px; gap: 24px; align-items: center; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; }
 
 .schedule-row:last-child { border-bottom: 1px solid var(--line); }
 
@@ -365,7 +455,16 @@ button:disabled { cursor: not-allowed; }
 
 .schedule-row:disabled { color: #9b958d; }
 
-.queue-page { min-height: calc(100svh - var(--header-height)); padding: 48px 4vw 80px; background: var(--ink); color: var(--white); display: grid; grid-template-rows: auto 1fr auto auto; }
+.queue-page { min-height: calc(100svh - var(--header-height)); padding: 40px var(--gutter) 72px; background: var(--ink); color: var(--white); display: grid; grid-template-rows: auto auto 1fr auto auto; }
+
+/* 무엇을 기다리는지. 순번만 있으면 어느 공연인지 알 수 없다 */
+.queue-show { margin-top: 28px; display: flex; align-items: center; gap: 14px; }
+
+.queue-show-thumb { width: 56px; flex: none; }
+.queue-show-thumb .poster-type { display: none; }
+
+.queue-show strong { display: block; font-size: var(--fs-title); font-weight: 700; }
+.queue-show p { margin: 4px 0 0; color: #b8b0a8; font-size: var(--fs-body); }
 
 .queue-meta { display: flex; justify-content: space-between; }
 
@@ -380,7 +479,7 @@ button:disabled { cursor: not-allowed; }
 .queue-focus > span { display: block; color: #aaa39b; }
 
 /* 이 화면에서 가장 밝은 것. 검정 위라 형광색을 쓸 수 있다. */
-.queue-focus strong { display: block; margin: 12px 0; font-size: clamp(8rem, 26vw, 24rem); line-height: .76; letter-spacing: -.1em; color: var(--volt); font-variant-numeric: tabular-nums; }
+.queue-focus strong { display: block; margin: 12px 0; font-size: var(--fs-focus); line-height: 1; font-weight: 700; letter-spacing: -.03em; color: var(--volt); font-variant-numeric: tabular-nums; }
 
 .queue-focus p { color: #c2bbb4; }
 
@@ -395,7 +494,7 @@ button:disabled { cursor: not-allowed; }
 /* 좌석 화면은 둘러보는 화면이 아니라 거래하는 화면이다.
    포스터 활자(최대 96px)는 목록·상세의 것이고, 여기서는 좌석표가 주인공이라
    머리글을 한 줄로 접는다. 전에는 제목만으로 화면 절반을 먹어 좌석표가 잘렸다. */
-.seat-page-heading { padding: 20px 4vw 18px; display: grid; grid-template-columns: 1fr auto; align-items: end; border-bottom: 1px solid var(--line); }
+.seat-page-heading { padding: 20px var(--gutter) 18px; display: grid; grid-template-columns: 1fr auto; align-items: end; border-bottom: 1px solid var(--line); }
 
 .seat-page-heading .back-link { grid-column: 1 / -1; margin-bottom: 12px; }
 
@@ -403,7 +502,7 @@ button:disabled { cursor: not-allowed; }
 
 .seat-page-heading > div > p:last-child { display: flex; gap: 8px; align-items: center; color: var(--muted); }
 
-.seat-workspace { padding: 28px 4vw 160px; }
+.seat-workspace { padding: 28px var(--gutter) 160px; }
 
 .stage { width: min(680px, 80vw); margin: 0 auto 36px; padding: 12px; border-top: 5px solid var(--ink); text-align: center; color: var(--muted); font-size: .7rem; letter-spacing: .24em; }
 
@@ -411,7 +510,7 @@ button:disabled { cursor: not-allowed; }
 
 .seat-section-heading { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
 
-.seat-section-heading h2 { margin: 0 0 10px; font-size: 1.6rem; }
+.seat-section-heading h2 { margin: 0 0 10px; font-size: var(--fs-sub); font-weight: 700; }
 
 .seat-section-heading span { color: var(--muted); font-size: .8rem; }
 
@@ -479,33 +578,36 @@ button:disabled { cursor: not-allowed; }
 .legend-dot.selected { background: var(--ink); border-color: var(--ink); }
 .legend-dot.unavailable { background: var(--sold); border-color: var(--sold); }
 
-.selection-bar { position: fixed; z-index: 12; left: 0; right: 0; bottom: 0; min-height: 110px; padding: 20px 4vw; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 28px; align-items: center; background: var(--ink); color: var(--white); }
+.selection-bar { position: fixed; z-index: 12; left: 0; right: 0; bottom: 0; min-height: 110px; padding: 20px var(--gutter); display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 28px; align-items: center; background: var(--ink); color: var(--white); }
 
 .selection-bar span { font-weight: 800; }
 .selection-bar p { margin: 5px 0 0; color: #aaa39b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.selection-bar > strong { font-size: 1.5rem; }
+.selection-bar > strong { font-size: var(--fs-sub); }
 
-.floating-error { position: fixed; z-index: 30; left: 50%; bottom: 132px; transform: translateX(-50%); max-width: 90vw; padding: 14px 18px; background: #8e2418; color: white; }
+.floating-error { position: fixed; z-index: 30; left: 50%; bottom: 132px; transform: translateX(-50%); max-width: 90vw; padding: 14px 18px; border-radius: var(--radius); background: #8e2418; color: white; }
 
-.reservation-page { padding: 48px 4vw 100px; }
+.reservation-page { padding: 48px var(--gutter) 100px; }
 
-.reservation-status { min-height: 310px; padding: 34px; background: var(--ink); color: var(--white); display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; }
+.reservation-status { min-height: 240px; padding: 28px; border-radius: var(--radius); background: var(--ink); color: var(--white); display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr; }
 
 .reservation-status > div { align-self: center; display: flex; align-items: center; gap: 18px; }
 
-.reservation-status h1 { margin: 0; font-size: clamp(3.4rem, 7vw, 7rem); letter-spacing: -.07em; }
+.reservation-status h1 { margin: 0; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; }
 
 .hold-countdown { align-self: center; text-align: right; }
 .hold-countdown span { display: block; color: #aaa39b; font-size: .8rem; }
 /* 남은 시간은 급한 정보다. 종이 위라 형광색 대신 경고색을 쓴다. */
-.hold-countdown strong { font-size: clamp(3rem, 7vw, 6rem); font-weight: 900; letter-spacing: -.04em; color: var(--danger); font-variant-numeric: tabular-nums; }
+.hold-countdown strong { font-size: var(--fs-focus); font-weight: 700; letter-spacing: -.03em; color: var(--danger); font-variant-numeric: tabular-nums; }
 
 .reservation-status.confirmed { background: var(--success); }
 .reservation-status.cancelled, .reservation-status.expired { background: #5e5953; }
 
-.reservation-detail { padding: 68px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8vw; border-bottom: 1px solid var(--line); }
+.reservation-detail { padding: 48px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6vw; align-items: start; border-bottom: 1px solid var(--line); }
 
-.reservation-detail h2 { margin: 0 0 20px; font-size: clamp(2.6rem, 5vw, 5rem); letter-spacing: -.06em; }
+.ticket-face { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 20px; align-items: start; }
+.ticket-thumb .poster-type { display: none; }
+
+.reservation-detail h2 { margin: 0 0 16px; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; }
 
 .reservation-detail p { color: var(--muted); display: flex; align-items: center; gap: 8px; }
 
@@ -515,7 +617,7 @@ button:disabled { cursor: not-allowed; }
 .reservation-detail dd { margin: 0; text-align: right; }
 
 .demo-payment { padding: 56px 0; display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: end; border-bottom: 1px solid var(--line); }
-.demo-payment h2 { margin: 0 0 12px; font-size: 2rem; }
+.demo-payment h2 { margin: 0 0 12px; font-size: var(--fs-sub); font-weight: 700; }
 .demo-payment p { max-width: 620px; color: var(--muted); line-height: 1.6; }
 .demo-payment .form-error { grid-column: 1 / -1; }
 
@@ -527,29 +629,31 @@ button:disabled { cursor: not-allowed; }
 .danger { color: #a3291b; }
 .form-note { color: var(--success); }
 
-.list-page-heading { padding: 80px 4vw 50px; border-bottom: 1px solid var(--line); }
-.list-page-heading h1 { margin: 0; font-size: clamp(3.6rem, 8vw, 8rem); letter-spacing: -.08em; }
+.list-page-heading { padding: 80px var(--gutter) 50px; border-bottom: 1px solid var(--line); }
+.list-page-heading h1 { margin: 0; font-size: var(--fs-page); font-weight: 700; letter-spacing: -.02em; }
 .list-page-heading > p:last-child { color: var(--muted); }
 
-.reservation-row { min-height: 118px; display: grid; grid-template-columns: 110px minmax(220px, 1fr) 130px 130px 28px; gap: 24px; align-items: center; border-top: 1px solid var(--line); }
+.reservation-row { min-height: 108px; display: grid; grid-template-columns: 64px minmax(220px, 1fr) 150px 130px 28px; gap: 20px; align-items: center; border-top: 1px solid var(--line); }
+
+/* 목록의 썸네일. 이 크기에서 포스터 위 활자는 읽히지 않고 얼룩으로만 보인다 */
+.reservation-thumb .poster-type { display: none; }
+.reservation-row > div:nth-child(2) { display: grid; gap: 5px; justify-items: start; }
 .reservation-row:last-child { border-bottom: 1px solid var(--line); }
 .reservation-row:hover { background: var(--white); }
-.reservation-row h2 { margin: 0 0 5px; font-size: 1.3rem; }
+.reservation-row h2 { margin: 0 0 5px; font-size: var(--fs-title); font-weight: 700; }
 .reservation-row p { margin: 0; color: var(--muted); font-size: .85rem; }
 .reservation-row time { color: var(--muted); font-size: .82rem; }
 
-.status-label { width: fit-content; padding: 6px 8px; border: 1px solid var(--line); font-size: .72rem; font-weight: 800; }
+.status-label { width: fit-content; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fs-badge); font-weight: 700; }
 .status-label.confirmed { color: var(--success); border-color: var(--success); }
 .status-label.pending { color: var(--ink); border-color: var(--ink); }
 
 .empty-state { padding: 90px 0; text-align: center; }
-.empty-state h2 { margin: 0 0 10px; font-size: 2rem; }
+.empty-state h2 { margin: 0 0 10px; font-size: var(--fs-sub); font-weight: 700; }
 .empty-state p { color: var(--muted); margin-bottom: 28px; }
 
 .empty-copy { padding: 50px 0; color: var(--muted); border-top: 1px solid var(--line); }
 
-@keyframes rise-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slow-turn { to { transform: rotate(360deg); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
 @keyframes drawer-in { from { transform: translateX(36px); } to { transform: translateX(0); } }
@@ -563,30 +667,23 @@ button:disabled { cursor: not-allowed; }
   .nav a, .nav .text-button { min-height: 48px; justify-content: flex-start; }
   .nav-user { padding: 12px 0 4px; }
   .correctness-dialog { width: calc(100vw - 12px); padding: 28px 22px; }
-  .catalog-intro { min-height: calc(100svh - var(--header-height)); grid-template-columns: 1fr; grid-template-rows: 1fr 34vh; }
-  .catalog-copy { padding: 64px 20px 44px; }
-  .catalog-copy h1 { font-size: clamp(3.25rem, 15vw, 5.4rem); }
-  .intro-copy { margin-top: 24px; }
-  .venue-mark { padding: 20px; }
-  .venue-ring { width: 52vw; }
-  .catalog-list, .reservation-list { padding: 64px 20px; }
-  .concert-row { grid-template-columns: 34px 1fr 28px; gap: 12px; padding: 20px 0; }
-  .concert-row > p { grid-column: 2; margin: 0; }
-  .concert-row > svg { grid-column: 3; grid-row: 1 / 3; }
+  .catalog-list, .reservation-list { padding: 28px 20px 64px; }
+  /* 좁은 화면에서는 2열로 못 박는다. auto-fill에 맡기면 414px에서 3열이 되고
+     카드가 150px까지 줄어 날짜가 두 줄로 접힌다. */
+  .concert-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; }
+  .concert-card-venue, .concert-card-when { font-size: var(--fs-small); }
   .site-footer { min-height: 190px; padding: 36px 20px; flex-direction: column; align-items: flex-start; justify-content: space-between; }
   .auth-layout { grid-template-columns: 1fr; }
   .auth-context { display: none; }
   .auth-form-wrap { padding: 64px 20px; }
   .detail-page { padding: 20px 20px 80px; }
-  .concert-hero { min-height: auto; padding: 54px 0; grid-template-columns: 1fr; }
-  .concert-hero h1 { font-size: clamp(3.5rem, 17vw, 6rem); }
-  .venue-block { min-height: 170px; }
+  .concert-hero { padding: 20px 0 28px; grid-template-columns: 1fr; gap: 20px; }
+  .poster-480 { max-width: 240px; }
   .schedule-row { min-height: 114px; grid-template-columns: 1fr auto 24px; gap: 12px; }
   .schedule-row span { grid-column: 1; }
   .schedule-row strong { grid-column: 2; grid-row: 1 / 3; }
   .schedule-row svg { grid-column: 3; grid-row: 1 / 3; }
   .queue-page { padding: 30px 20px 54px; }
-  .queue-focus strong { font-size: clamp(8rem, 46vw, 13rem); }
   .queue-actions { align-items: stretch; flex-direction: column; }
   .queue-actions .primary-button { width: 100%; }
   .seat-page-heading { padding: 16px 20px 16px; display: block; }
@@ -602,15 +699,15 @@ button:disabled { cursor: not-allowed; }
   .reservation-page { padding: 24px 20px 80px; }
   .reservation-status { min-height: 330px; padding: 24px; display: block; }
   .reservation-status > div { margin-top: 60px; }
-  .reservation-status h1 { font-size: clamp(3.4rem, 17vw, 5rem); }
   .hold-countdown { margin-top: 40px; text-align: left; }
-  .reservation-detail { grid-template-columns: 1fr; }
+  .reservation-detail { grid-template-columns: 1fr; gap: 28px; }
+  .ticket-face { grid-template-columns: 84px minmax(0, 1fr); gap: 16px; }
   .reservation-detail dl div { grid-template-columns: 88px 1fr; }
   .demo-payment { grid-template-columns: 1fr; align-items: start; }
   .demo-payment .primary-button { width: 100%; }
   .reservation-actions { align-items: stretch; flex-direction: column; }
   .list-page-heading { padding: 64px 20px 40px; }
-  .reservation-row { min-height: 150px; padding: 20px 0; grid-template-columns: 90px 1fr 24px; gap: 10px; }
+  .reservation-row { min-height: 130px; padding: 16px 0; grid-template-columns: 56px 1fr 24px; gap: 12px; }
   .reservation-row time, .reservation-row > strong { grid-column: 2; }
   .reservation-row > svg { grid-column: 3; grid-row: 1 / 5; }
 }
@@ -638,16 +735,4 @@ button:disabled { cursor: not-allowed; }
 }
 
 
-/* 공연 목록 — 언제 하는지와 자리가 남았는지 */
-.concert-when { margin: 6px 0 0; color: var(--muted); font-size: .82rem; }
 
-.concert-meta { display: grid; gap: 6px; justify-items: start; }
-.concert-meta p { margin: 0; }
-
-.concert-status { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; color: var(--muted); }
-
-/* 상태를 색만으로 말하지 않는다 — 점과 글자를 함께 둔다 */
-.concert-status i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.concert-status.open { color: var(--ink); }
-.concert-status.low { color: #a8600a; }
-.concert-status.soldout { color: var(--muted); }

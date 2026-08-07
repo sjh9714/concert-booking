@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { ErrorState, LoadingState } from "../components/AsyncState";
+import { Poster } from "../components/Poster";
 import { apiFetch } from "../lib/api";
 import { concertDate, countdown, countdownLabel, currency, dateTime, seatLabel } from "../lib/format";
 import { paymentSchema, reservationDetailSchema } from "../lib/contracts";
@@ -101,15 +102,21 @@ export function ReservationPage() {
       </header>
 
       <section className="reservation-detail" aria-labelledby="reservation-detail-title">
-        <div>
-          <p className="eyebrow">YOUR TICKETS</p>
-          <h2 id="reservation-detail-title">{data.concertTitle}</h2>
-          <p><MapPin aria-hidden="true" /> {data.venue}</p>
-          {data.scheduleDate && (
-            // 원본 형식(2026-08-28 20:00:00)이 그대로 나오고 있었다.
-            // 티켓에 적히는 날짜는 사람이 읽는 형식이어야 한다.
-            <p>{concertDate(data.scheduleDate, data.startTime)}</p>
-          )}
+        {/* 티켓은 포스터로 알아본다 — 목록과 같은 그림이 여기에도 있어야 이어진다 */}
+        <div className="ticket-face">
+          <div className="ticket-thumb">
+            <Poster title={data.concertTitle ?? ""} />
+          </div>
+          <div>
+            <p className="eyebrow">YOUR TICKETS</p>
+            <h2 id="reservation-detail-title">{data.concertTitle}</h2>
+            <p><MapPin aria-hidden="true" /> {data.venue}</p>
+            {data.scheduleDate && (
+              // 원본 형식(2026-08-28 20:00:00)이 그대로 나오고 있었다.
+              // 티켓에 적히는 날짜는 사람이 읽는 형식이어야 한다.
+              <p>{concertDate(data.scheduleDate, data.startTime)}</p>
+            )}
+          </div>
         </div>
         <dl>
           <div><dt>좌석</dt><dd>{seats}</dd></div>
