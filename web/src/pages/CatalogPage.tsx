@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { concertDate } from "../lib/format";
 import { Link } from "react-router-dom";
 import { ErrorState, LoadingState } from "../components/AsyncState";
+import { BannerCarousel } from "../components/BannerCarousel";
 import { Poster } from "../components/Poster";
 import { apiFetch } from "../lib/api";
 import { concertListSchema } from "../lib/contracts";
@@ -37,7 +38,13 @@ export function CatalogPage() {
        * 표어를 두지 않는다. 실측한 두 서비스 모두 목록 위에 홍보 문구가 없고
        * 바로 공연부터 나온다 — 예매하러 온 사람에게 첫 화면은 공연이다.
        * 서비스가 무엇을 보장하는지는 머리글의 '예매가 안전한 이유'가 말한다.
+       *
+       * 대신 맨 위는 배너 캐러셀이다. NOL 티켓도 그렇고, 그림이 첫 화면을 이끈다.
        */}
+      {concerts.data && concerts.data.length > 0 && (
+        <BannerCarousel concerts={concerts.data} />
+      )}
+
       <section className="catalog-list" aria-labelledby="concert-list-title">
         <div className="section-heading">
           <h1 id="concert-list-title">예매 중인 공연</h1>

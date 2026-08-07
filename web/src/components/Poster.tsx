@@ -7,7 +7,7 @@
  *
  * 비율은 3:4다 — NOL 티켓 0.753, 예스24 0.71을 실측해 정했다(`DESIGN.md`).
  */
-import { POSTER_SLUGS } from "../lib/posters";
+import { POSTER_SLUGS } from "../lib/artwork";
 
 type PosterProps = {
   title: string;

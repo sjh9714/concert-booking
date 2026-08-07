@@ -728,3 +728,117 @@ test("a queue-stream 401 clears session immediately and redirects without reconn
     await page.evaluate(() => sessionStorage.getItem("ticketline.auth")),
   ).toBeNull();
 });
+
+/*
+ * 배너 캐러셀.
+ *
+ * NOL 티켓 캐러셀에는 정지 버튼이 없고 썸네일이 <div>라 키보드로 닿지 않는다.
+ * 실측을 기준으로 삼되 그 부분은 따라가지 않기로 했으므로(web/DESIGN.md),
+ * "더한 것"이 실제로 동작하는지를 여기서 지킨다.
+ */
+test("배너는 자동으로 넘어가고, 정지를 누르면 멈춘다", async ({ page }) => {
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "추천 공연" });
+  await expect(banner).toBeVisible();
+
+  const shown = () => banner.locator(".banner-thumb[aria-current]").getAttribute("aria-label");
+  const first = await shown();
+  expect(first).toContain("1번째");
+
+  // 자동 전환은 5초다. 6초 안에 다른 공연으로 넘어가야 한다.
+  await expect
+    .poll(shown, { timeout: 6_000 })
+    .not.toBe(first);
+
+  // 정지를 누르면 그 뒤로는 그대로여야 한다 — 이게 없으면 WCAG 2.2.2 위반이다
+  await banner.getByRole("button", { name: "자동 넘김 정지" }).click();
+  const held = await shown();
+  await page.waitForTimeout(6_000);
+  expect(await shown()).toBe(held);
+  await expect(banner.getByRole("button", { name: "자동 넘김 재생" })).toBeVisible();
+});
+
+test("배너는 키보드로 넘길 수 있고 마지막에서 처음으로 이어진다", async ({
+  page,
+}, testInfo) => {
+  // 좁은 화면에서는 화살표를 감춘다 — 썸네일 6개와 함께 두기엔 자리가 없다
+  skipMobile(testInfo.project.name);
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "추천 공연" });
+  // 자동 전환이 섞이면 무엇 때문에 바뀌었는지 알 수 없다
+  await banner.getByRole("button", { name: "자동 넘김 정지" }).click();
+
+  const shown = () => banner.locator(".banner-thumb[aria-current]").getAttribute("aria-label");
+
+  // 썸네일은 진짜 버튼이라 키보드로 누를 수 있다
+  const last = banner.getByRole("button", { name: /6번째:/ });
+  await last.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(shown).toContain("6번째");
+
+  // 마지막에서 한 번 더 → 복제를 거쳐 처음으로 돌아온다
+  await banner.getByRole("button", { name: "다음 공연" }).click();
+  await expect.poll(shown).toContain("1번째");
+
+  // 처음에서 뒤로 → 반대쪽 복제를 거쳐 마지막으로
+  await banner.getByRole("button", { name: "이전 공연" }).click();
+  await expect.poll(shown).toContain("6번째");
+});
+
+test("보이지 않는 배너 슬라이드는 탭 순서에 들어가지 않는다", async ({ page }) => {
+  await page.goto("/");
+  const banner = page.getByRole("region", { name: "추천 공연" });
+  await expect(banner).toBeVisible();
+
+  /*
+   * 슬라이드가 8칸(복제 포함)이라 그대로 두면 보이지도 않는 링크 7개가 탭에 걸린다.
+   * inert가 실제로 그것들을 빼는지 본다.
+   */
+  const reachable = await banner.evaluate((root) =>
+    [...root.querySelectorAll("a, button")].filter(
+      (el) => !el.closest("[inert]"),
+    ).length,
+  );
+  // 화살표 2 + 썸네일 6 + 정지 1 + 보이는 슬라이드의 예매하기 1
+  expect(reachable).toBe(10);
+});
+
+/*
+ * 감소 모션.
+ *
+ * CSS로 전환 시간만 0으로 만드는 것으로는 부족하다 — 화면이 5초마다 계속 바뀌는 것
+ * 자체가 문제다. 자동 전환을 아예 시작하지 않는지 본다.
+ */
+test.describe("움직임을 줄이는 설정", () => {
+  test("배너가 저절로 넘어가지 않는다", async ({ page }) => {
+    /*
+     * `test.use({ reducedMotion })`는 이 설정에서 적용되지 않았다 — 테스트 안에서
+     * matchMedia가 false였다. 걸리지 않았는데 통과하면 아무것도 지키지 못하므로
+     * 화면을 열기 전에 직접 건다. 아래에서 실제로 걸렸는지 한 번 더 단언한다.
+     */
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    const banner = page.getByRole("region", { name: "추천 공연" });
+    await expect(banner).toBeVisible();
+
+    // 설정이 실제로 걸렸는지부터 본다 — 안 걸렸는데 통과하면 아무것도 지키지 못한다
+    expect(
+      await page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches),
+    ).toBe(true);
+
+    const shown = () => banner.locator(".banner-thumb[aria-current]").getAttribute("aria-label");
+    const first = await shown();
+    expect(first).toContain("1번째");
+
+    // 자동 전환이 5초이므로 그 두 배를 기다려도 그대로여야 한다
+    await page.waitForTimeout(11_000);
+    expect(await shown()).toBe(first);
+
+    // 자동 전환이 없으니 정지 버튼도 둘 이유가 없다
+    await expect(banner.getByRole("button", { name: /자동 넘김/ })).toHaveCount(0);
+
+    // 그래도 손으로는 넘길 수 있어야 한다
+    await banner.getByRole("button", { name: /3번째:/ }).click();
+    await expect.poll(shown).toContain("3번째");
+  });
+});
