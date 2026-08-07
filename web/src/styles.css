@@ -165,33 +165,6 @@ button:disabled { cursor: not-allowed; }
 
 .text-button:hover { color: var(--ink); }
 
-.correctness-dialog {
-  width: min(580px, calc(100vw - 24px));
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0 0 0 auto;
-  padding: clamp(28px, 5vw, 56px);
-  border: 0;
-  border-left: 1px solid var(--line);
-  background: var(--white);
-  color: var(--ink);
-}
-
-.correctness-dialog[open] { animation: drawer-in .24s ease-out both; }
-.correctness-dialog::backdrop { background: rgba(24, 22, 20, .58); }
-
-.correctness-heading { display: grid; grid-template-columns: 1fr 44px; gap: 24px; align-items: start; }
-.correctness-heading h2 { margin: 0; font-size: var(--fs-page); font-weight: 700; line-height: 1.2; letter-spacing: -.02em; }
-.drawer-close { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--ink); }
-.correctness-intro { margin: 30px 0 42px; max-width: 460px; color: var(--muted); line-height: 1.65; }
-.correctness-list { margin: 0; padding: 0; list-style: none; }
-.correctness-list li { display: grid; grid-template-columns: 42px 1fr; gap: 18px; padding: 24px 0; border-top: 1px solid var(--line); }
-.correctness-list li:last-child { border-bottom: 1px solid var(--line); }
-.correctness-list li > span { color: var(--ink); font-size: .76rem; font-weight: 800; letter-spacing: .08em; }
-.correctness-list h3 { margin: 0 0 8px; font-size: 1.05rem; }
-.correctness-list p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }
-
 /* 색을 못 박지 않는다. 이 클래스는 종이 위에도, 검정·초록 면 위에도 쓰인다.
    한 번 var(--muted)로 고정했다가 예매 완료 화면(초록)에서 대비 1.15:1이 됐다.
    글자색은 그 면이 정하고, 여기서는 크기와 자간만 정한다. */
@@ -345,6 +318,7 @@ button:disabled { cursor: not-allowed; }
 
 .banner-thumb {
   /* NOL 실측 52×52 · 모서리 6px */
+  position: relative;
   width: 52px;
   height: 52px;
   padding: 0;
@@ -361,7 +335,21 @@ button:disabled { cursor: not-allowed; }
 
 .banner-thumb:hover { opacity: .8; }
 
-.banner-thumb.is-current { opacity: 1; box-shadow: 0 0 0 2px var(--white); }
+/*
+ * 지금 보는 칸의 테두리는 **안쪽으로** 그린다.
+ * 바깥 그림자로 그렸더니 위아래와 좌우가 잘렸다 — 스트립이 `overflow-x: auto`라
+ * 세로도 함께 잘리고(한 축이 visible이 아니면 다른 축도 auto가 된다),
+ * 가로로 미는 통에 양 끝도 잘린다. 안쪽이면 잘릴 자리가 없다.
+ */
+.banner-thumb.is-current { opacity: 1; }
+
+.banner-thumb.is-current::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--white);
+}
 
 /* ── 공연 카드 격자 ────────────────────────────────────────
    실측한 두 서비스 모두 목록이 포스터 격자였다. 우리는 세로 텍스트 목록이었고
@@ -806,7 +794,6 @@ button:disabled { cursor: not-allowed; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .35; } }
-@keyframes drawer-in { from { transform: translateX(36px); } to { transform: translateX(0); } }
 
 @media (max-width: 760px) {
   :root { --header-height: 64px; }
@@ -816,7 +803,6 @@ button:disabled { cursor: not-allowed; }
   .nav.open { display: flex; }
   .nav a, .nav .text-button { min-height: 48px; justify-content: flex-start; }
   .nav-user { padding: 12px 0 4px; }
-  .correctness-dialog { width: calc(100vw - 12px); padding: 28px 22px; }
   .catalog-list, .reservation-list { padding: 28px 20px 64px; }
   /* 좁은 화면에서는 2열로 못 박는다. auto-fill에 맡기면 414px에서 3열이 되고
      카드가 150px까지 줄어 날짜가 두 줄로 접힌다. */
@@ -873,7 +859,6 @@ button:disabled { cursor: not-allowed; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-
 /* ── 재작성 (DESIGN.md) ────────────────────────────────────
    카드는 모서리를 둥글리지 않는다. 그림자도 없다 — 종이는 뜨지 않는다.
    둥근 것은 알약 버튼과 상태 칩뿐이다.
@@ -890,6 +875,4 @@ button:disabled { cursor: not-allowed; }
   }
   html { scroll-behavior: auto; }
 }
-
-
 

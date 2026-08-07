@@ -126,14 +126,18 @@ export function ReservationPage() {
       </section>
 
       {pending && !expiredLocally && (
-        <section className="demo-payment" aria-labelledby="demo-payment-title">
+        <section className="demo-payment" aria-labelledby="payment-title">
           <div>
-            <p className="eyebrow">DEMO PAYMENT</p>
-            <h2 id="demo-payment-title">데모 결제로 좌석 확정</h2>
-            <p>실제 카드나 결제 정보는 받지 않습니다. 버튼을 누르면 테스트 결제가 즉시 완료됩니다.</p>
+            <p className="eyebrow">결제</p>
+            <h2 id="payment-title">결제하고 좌석 확정</h2>
+            {/*
+             * 카드 정보를 받지 않는다는 것과 청구가 없다는 것은 남겨야 한다.
+             * 없애면 진짜 결제로 오인할 수 있다 — 이건 제품 설명이 아니라 고지다.
+             */}
+            <p>테스트 결제입니다. 카드 정보를 받지 않으며 실제로 청구되지 않습니다.</p>
           </div>
           <button className="primary-button" type="button" disabled={pay.isPending} onClick={() => pay.mutate()}>
-            {pay.isPending ? "중복 결제 확인 중" : `${currency(data.totalAmount)} 데모 결제`}
+            {pay.isPending ? "중복 결제 확인 중" : `${currency(data.totalAmount)} 결제하기`}
           </button>
           {pay.isError && <p className="form-error" role="alert">{pay.error.message}</p>}
         </section>
@@ -142,7 +146,7 @@ export function ReservationPage() {
       {data.status === "CONFIRMED" && (
         <section className="confirmation-note">
           <Check aria-hidden="true" />
-          <div><strong>좌석이 확정되었습니다.</strong><p>이 화면은 실제 입장권이 아닌 포트폴리오 데모입니다.</p></div>
+          <div><strong>좌석이 확정되었습니다.</strong><p>테스트 환경이라 이 화면은 실제 입장권이 아닙니다.</p></div>
         </section>
       )}
 

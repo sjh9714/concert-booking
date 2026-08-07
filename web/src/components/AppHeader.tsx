@@ -2,7 +2,6 @@ import { Menu, Ticket, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { CorrectnessDrawer } from "./CorrectnessDrawer";
 
 export function AppHeader() {
   const { session, logout } = useAuth();
@@ -41,7 +40,6 @@ export function AppHeader() {
         <NavLink to="/" end onClick={close}>
           공연
         </NavLink>
-        <CorrectnessDrawer />
         {session ? (
           <>
             <NavLink to="/reservations" onClick={close}>
