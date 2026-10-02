@@ -7,3 +7,6 @@
 *.sql text eol=lf
 *.js text eol=lf
 *.sh text eol=lf
+
+# Archived patches preserve diff context prefixes and original whitespace.
+docs/evidence/**/*.patch -whitespace

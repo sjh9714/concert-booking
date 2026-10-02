@@ -1,7 +1,6 @@
 package com.concert.booking.dto.reservation;
 
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -15,7 +14,7 @@ public record ReservationRequest(
         @Size(max = 4, message = "최대 4석까지 예매 가능합니다.")
         List<Long> seatIds,
 
-        @NotBlank(message = "입장 토큰은 필수입니다.")
+        // 대기열 토큰은 실험 모드의 QueueTokenGuard가 검증한다.
         String queueToken
 ) {
 }

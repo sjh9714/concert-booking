@@ -7,3 +7,4 @@ services:
     build:
       args:
         VITE_DEMO_MODE: "true"
+        VITE_QUEUE_ENABLED: "true"

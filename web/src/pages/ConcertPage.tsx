@@ -30,7 +30,7 @@ export function ConcertPage() {
   }
 
   const startBooking = (scheduleId: number) => {
-    const queuePath = `/queue/${scheduleId}?concert=${id}`;
+    const queuePath = `/${import.meta.env.VITE_QUEUE_ENABLED === "true" ? "queue" : "seats"}/${scheduleId}?concert=${id}`;
     navigate(session ? queuePath : `/login?next=${encodeURIComponent(queuePath)}`);
   };
 

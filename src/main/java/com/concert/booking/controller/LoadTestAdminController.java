@@ -38,7 +38,7 @@ import java.util.Set;
 
 @Slf4j
 @RestController
-@Profile("(load-test | e2e | test) & !prod")
+@Profile("(load-test | e2e | test) & !prod & !service")
 @RequestMapping("/api/admin/load-test")
 @RequiredArgsConstructor
 public class LoadTestAdminController {

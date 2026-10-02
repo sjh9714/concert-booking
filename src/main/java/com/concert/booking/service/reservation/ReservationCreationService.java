@@ -51,12 +51,11 @@ public class ReservationCreationService {
             throw new SeatNotAvailableException("선택한 좌석 중 이미 예매된 좌석이 있습니다.");
         }
 
-        seats.forEach(Seat::hold);
-
         int totalAmount = seats.stream().mapToInt(Seat::getPrice).sum();
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(HOLD_MINUTES);
         Reservation reservation = Reservation.create(user, schedule, totalAmount, expiresAt);
         reservationRepository.save(reservation);
+        seats.forEach(seat -> seat.hold(reservation.getId()));
 
         for (Seat seat : seats) {
             ReservationSeat reservationSeat = ReservationSeat.create(reservation, seat);
@@ -64,9 +63,9 @@ public class ReservationCreationService {
             reservation.addReservationSeat(reservationSeat);
         }
 
-        schedule.decreaseAvailableSeats(seats.size());
+        if (mode != ReservationCreationMode.SEAT_LOCK) schedule.decreaseAvailableSeats(seats.size());
         reservationIdempotencyService.complete(command.claimId(), reservation);
-        outboxEventService.saveReservationCreated(reservation);
+        if (mode != ReservationCreationMode.SEAT_LOCK) outboxEventService.saveReservationCreated(reservation);
 
         if (mode == ReservationCreationMode.DISTRIBUTED) {
             for (Seat seat : seats) {
@@ -85,14 +84,14 @@ public class ReservationCreationService {
         return switch (mode) {
             case PESSIMISTIC, DISTRIBUTED -> concertScheduleRepository.findByIdForUpdate(scheduleId)
                     .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
-            case OPTIMISTIC -> concertScheduleRepository.findById(scheduleId)
+            case SEAT_LOCK, OPTIMISTIC -> concertScheduleRepository.findById(scheduleId)
                     .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
         };
     }
 
     private List<Seat> findAvailableSeats(ReservationCommand command, ReservationCreationMode mode) {
         return switch (mode) {
-            case PESSIMISTIC -> seatRepository.findAllByScheduleIdAndIdInAndAvailableForUpdate(
+            case SEAT_LOCK, PESSIMISTIC -> seatRepository.findAllByScheduleIdAndIdInAndAvailableForUpdate(
                     command.request().scheduleId(),
                     command.sortedSeatIds()
             );

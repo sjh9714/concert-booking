@@ -1,3 +1,5 @@
+> 기존 Redis·Kafka·락 전략 실험의 참고 문서입니다. 기본 `service` 모드의 흐름·보장 범위·읽는 순서는 [SERVICE_GUIDE.md](SERVICE_GUIDE.md)를 우선합니다.
+
 # Design
 
 Concert Booking은 고동시성 콘서트 예매 상황에서 좌석 정합성, 입장 제어, 결제/만료 race, 이벤트 발행 실패를 다루는 Spring Boot 백엔드입니다. 이 문서는 현재 코드와 테스트로 확인된 설계를 기준으로 작성합니다.

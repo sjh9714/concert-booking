@@ -35,3 +35,6 @@ k6/results/
 
 # Local monitoring evidence helper
 monitoring/.generated/
+
+# Generated browser captures; curated README screens live in docs/assets.
+/web/artifacts/

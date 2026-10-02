@@ -36,6 +36,10 @@ public record ConcertResponse(
     }
 
     public static ConcertResponse from(Concert concert, List<ConcertSchedule> schedules) {
+        return from(concert, schedules, schedules.stream().mapToInt(ConcertSchedule::getAvailableSeats).sum());
+    }
+
+    public static ConcertResponse from(Concert concert, List<ConcertSchedule> schedules, int availableSeats) {
         List<LocalDate> dates = schedules.stream()
                 .map(ConcertSchedule::getScheduleDate)
                 .sorted(Comparator.naturalOrder())
@@ -50,7 +54,7 @@ public record ConcertResponse(
                 dates.isEmpty() ? null : dates.get(0),
                 dates.isEmpty() ? null : dates.get(dates.size() - 1),
                 schedules.size(),
-                schedules.stream().mapToInt(ConcertSchedule::getAvailableSeats).sum(),
+                availableSeats,
                 schedules.stream().mapToInt(ConcertSchedule::getTotalSeats).sum()
         );
     }

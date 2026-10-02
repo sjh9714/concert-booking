@@ -1,5 +1,6 @@
 package com.concert.booking.service.reservation;
 
+import org.springframework.beans.factory.annotation.Value;
 import com.concert.booking.common.exception.ForbiddenException;
 import com.concert.booking.common.exception.InvalidReservationStateException;
 import com.concert.booking.common.exception.ReservationNotFoundException;
@@ -19,6 +20,9 @@ public class ReservationCancellationService {
 
     private final ReservationRepository reservationRepository;
     private final OutboxEventService outboxEventService;
+    private final SeatReleaseService seatReleaseService;
+    @Value("${reservation.service-mode:false}")
+    private boolean serviceMode;
 
     @Transactional
     public void cancel(Long userId, Long reservationId) {
@@ -38,6 +42,7 @@ public class ReservationCancellationService {
         }
 
         reservation.cancel();
-        outboxEventService.saveReservationCancelled(reservation);
+        if (serviceMode) seatReleaseService.releaseHeldSeats(reservationId, "USER_CANCELLED");
+        else outboxEventService.saveReservationCancelled(reservation);
     }
 }

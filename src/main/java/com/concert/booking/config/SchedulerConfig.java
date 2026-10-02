@@ -9,6 +9,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+@org.springframework.context.annotation.Profile("!service")
 @Configuration
 @EnableScheduling
 @EnableSchedulerLock(defaultLockAtMostFor = "30s")

@@ -32,6 +32,12 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     long countByScheduleIdAndStatus(Long scheduleId, SeatStatus status);
 
+    long countByScheduleConcertIdAndStatus(Long concertId, SeatStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Seat s WHERE s.id IN :ids ORDER BY s.id")
+    List<Seat> findAllByIdForUpdate(@Param("ids") List<Long> ids);
+
     // 비관적 락: 좌석 ID 목록으로 AVAILABLE 좌석 조회 + FOR UPDATE
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -61,6 +67,6 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
 
     @Modifying
     @Query(nativeQuery = true,
-            value = "UPDATE seats SET status = 'AVAILABLE', version = 0 WHERE schedule_id = :scheduleId")
+            value = "UPDATE seats SET status = 'AVAILABLE', current_reservation_id = NULL, version = version + 1 WHERE schedule_id = :scheduleId")
     void resetSeatsByScheduleId(@Param("scheduleId") Long scheduleId);
 }

@@ -32,14 +32,14 @@ public class ConcertService {
         // 공연 수가 늘면 회차를 한 번에 가져와 묶는 쪽으로 바꾼다.
         return concertRepository.findAll().stream()
                 .map(concert -> ConcertResponse.from(
-                        concert, concertScheduleRepository.findByConcertId(concert.getId())))
+                        concert, concertScheduleRepository.findByConcertId(concert.getId()), availableForConcert(concert.getId())))
                 .toList();
     }
 
     public ConcertResponse getConcert(Long concertId) {
         Concert concert = concertRepository.findById(concertId)
                 .orElseThrow(() -> new ResourceNotFoundException("콘서트를 찾을 수 없습니다: " + concertId));
-        return ConcertResponse.from(concert, concertScheduleRepository.findByConcertId(concertId));
+        return ConcertResponse.from(concert, concertScheduleRepository.findByConcertId(concertId), availableForConcert(concertId));
     }
 
     public List<ConcertScheduleResponse> getSchedules(Long concertId) {
@@ -48,8 +48,15 @@ public class ConcertService {
         }
         List<ConcertSchedule> schedules = concertScheduleRepository.findByConcertId(concertId);
         return schedules.stream()
-                .map(ConcertScheduleResponse::from)
+                .map(schedule -> new ConcertScheduleResponse(schedule.getId(), concertId, schedule.getScheduleDate(),
+                        schedule.getStartTime(), schedule.getTotalSeats(),
+                        (int) seatRepository.countByScheduleIdAndStatus(schedule.getId(), com.concert.booking.domain.SeatStatus.AVAILABLE),
+                        com.concert.booking.common.util.ApiTime.ZONE_ID))
                 .toList();
+    }
+
+    private int availableForConcert(Long concertId) {
+        return (int) seatRepository.countByScheduleConcertIdAndStatus(concertId, com.concert.booking.domain.SeatStatus.AVAILABLE);
     }
 
     public List<SeatResponse> getSeats(Long concertId, Long scheduleId) {

@@ -80,6 +80,7 @@ class KafkaDltReplayIntegrationTest {
     @DisplayName("consumer 실패 메시지는 DLT로 이동하고 replay 후 좌석 반환이 멱등적으로 성공한다")
     void failed_cancelled_event_moves_to_dlt_and_replay_releases_seat_once() throws Exception {
         Scenario failedScenario = createPendingScenario();
+        reservationService.cancelReservation(failedScenario.userId(), failedScenario.reservationId());
         ReservationCancelledEvent failedEvent = event(failedScenario.reservationId(), failedScenario, "FORCE_DLT");
 
         failurePolicy.failForceDlt.set(true);
@@ -103,6 +104,7 @@ class KafkaDltReplayIntegrationTest {
         assertThat(redisTemplate.opsForValue().get(RedisKeyUtil.stockKey(failedScenario.scheduleId()))).isEqualTo("1");
 
         Scenario normalScenario = createPendingScenario();
+        reservationService.cancelReservation(normalScenario.userId(), normalScenario.reservationId());
         ReservationCancelledEvent normalEvent = event(normalScenario.reservationId(), normalScenario, "USER_CANCELLED");
         kafkaTemplate.send("reservation.cancelled", String.valueOf(normalScenario.reservationId()), normalEvent).get(5, TimeUnit.SECONDS);
 

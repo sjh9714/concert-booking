@@ -1,9 +1,10 @@
 package com.concert.booking.service.reservation;
 
+import com.concert.booking.domain.ReservationStatus;
+import com.concert.booking.repository.SeatRepository;
+import org.springframework.beans.factory.annotation.Value;
 import com.concert.booking.common.util.RedisKeyUtil;
 import com.concert.booking.domain.Reservation;
-import com.concert.booking.domain.ReservationSeat;
-import com.concert.booking.domain.SeatStatus;
 import com.concert.booking.repository.ReservationRepository;
 import com.concert.booking.repository.ReservationSeatRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,9 @@ public class SeatReleaseService {
     private final ReservationRepository reservationRepository;
     private final ReservationSeatRepository reservationSeatRepository;
     private final RedisTemplate<String, String> redisTemplate;
+    private final SeatRepository seatRepository;
+    @Value("${reservation.service-mode:false}")
+    private boolean serviceMode;
 
     @Transactional
     public SeatReleaseResult releaseHeldSeats(Long reservationId, String reason) {
@@ -31,18 +35,20 @@ public class SeatReleaseService {
             return new SeatReleaseResult(reservationId, 0, false);
         }
 
-        List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservationId);
+        if (reservation.getStatus() != ReservationStatus.CANCELLED
+                && reservation.getStatus() != ReservationStatus.EXPIRED) {
+            return new SeatReleaseResult(reservationId, 0, true);
+        }
+        List<Long> seatIds = reservationSeatRepository.findByReservationId(reservationId).stream()
+                .map(rs -> rs.getSeat().getId()).sorted().toList();
         int releasedCount = 0;
-
-        for (ReservationSeat rs : reservationSeats) {
-            if (rs.getSeat().getStatus() == SeatStatus.HELD) {
-                rs.getSeat().release();
+        for (var seat : seatRepository.findAllByIdForUpdate(seatIds)) {
+            if (seat.release(reservationId)) {
                 releasedCount++;
-                redisTemplate.delete(RedisKeyUtil.seatHoldKey(rs.getSeat().getId()));
+                if (!serviceMode) redisTemplate.delete(RedisKeyUtil.seatHoldKey(seat.getId()));
             }
         }
-
-        if (releasedCount > 0) {
+        if (!serviceMode && releasedCount > 0) {
             reservation.getSchedule().increaseAvailableSeats(releasedCount);
             incrementRedisStockIfPresent(reservation.getSchedule().getId(), releasedCount);
         }

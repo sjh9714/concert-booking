@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    default: service
   jackson:
     time-zone: Asia/Seoul
 

@@ -1,3 +1,5 @@
+> 기존 Redis·Kafka·락 전략 실험의 참고 문서입니다. 기본 `service` 모드의 흐름·보장 범위·읽는 순서는 [SERVICE_GUIDE.md](SERVICE_GUIDE.md)를 우선합니다.
+
 # Testing Evidence
 
 이 문서는 Concert Booking의 포트폴리오 claim을 어떤 테스트가 지지하는지와 아직 claim하지 않는 범위를

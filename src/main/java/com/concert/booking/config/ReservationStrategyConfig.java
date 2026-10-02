@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 @Slf4j
+@org.springframework.context.annotation.Profile("!service")
 @Configuration
 public class ReservationStrategyConfig {
 

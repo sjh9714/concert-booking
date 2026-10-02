@@ -186,26 +186,20 @@ jobs:
                   "not the legacy all-in-one architecture SVG"
               )
 
-          asset_pairs = (
-              ("seat-loser-recovery.png", "seat-loser-recovery.drawio"),
-              ("event-recovery-boundaries.png", "event-recovery-boundaries.drawio"),
-          )
-          asset_dir = Path("docs/assets/architecture")
-          for png_name, drawio_name in asset_pairs:
-              png = asset_dir / png_name
-              drawio = asset_dir / drawio_name
-              if not png.is_file() or not drawio.is_file():
-                  raise SystemExit(f"Missing focused diagram source/export pair: {png_name}, {drawio_name}")
-              if f"docs/assets/architecture/{png_name}" not in readme:
-                  raise SystemExit(f"README.md must reference {png_name}")
-              if f"docs/assets/architecture/{drawio_name}" not in readme:
-                  raise SystemExit(f"README.md must link editable source {drawio_name}")
-              width, height = struct.unpack(">II", png.read_bytes()[16:24])
-              if width < 2400 or height < 700:
-                  raise SystemExit(f"Diagram export is not 2x-sized: {png_name} ({width}x{height})")
-
-          if readme.count("그림 transcript:") < 2:
-              raise SystemExit("README.md must include a numbered text transcript for each diagram")
+          # 현재 기본 서비스 그림은 편집 가능한 SVG이며 구형 실험 그림은 archive에 보존한다.
+          from xml.etree import ElementTree as ET
+          svg = Path("docs/assets/architecture/request-flow.svg")
+          ET.parse(svg)
+          for reference in (
+              "docs/assets/screens/demo-desktop.png",
+              "docs/assets/architecture/request-flow.svg",
+              "docs/VERIFICATION.md",
+              "docs/SERVICE_GUIDE.md",
+          ):
+              if reference not in readme or not Path(reference).is_file():
+                  raise SystemExit(f"Missing current service evidence: {reference}")
+          if "그림 설명:" not in readme:
+              raise SystemExit("README.md must include the diagram's text description")
 
           print("OK")
           PY

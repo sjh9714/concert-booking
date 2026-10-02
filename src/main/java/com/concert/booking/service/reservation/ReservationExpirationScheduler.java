@@ -23,12 +23,15 @@ public class ReservationExpirationScheduler {
 
     private final ReservationRepository reservationRepository;
     private final OutboxEventService outboxEventService;
+    private final SeatReleaseService seatReleaseService;
+    @Value("${reservation.service-mode:false}")
+    private boolean serviceMode;
     private final TransactionTemplate transactionTemplate;
 
     @Value("${reservation.expiration.batch-size:100}")
     private int batchSize;
 
-    // 30초마다 실행, ShedLock으로 서버 2대 중복 실행 방지
+    // 30초마다 실행. 기본 서비스는 예약 행 잠금으로 중복 처리를 막고, 실험 프로필은 ShedLock도 사용한다.
     @Scheduled(fixedRate = 30000)
     @SchedulerLock(name = "expireReservations", lockAtLeastFor = "10s", lockAtMostFor = "30s")
     public void expireReservations() {
@@ -69,7 +72,8 @@ public class ReservationExpirationScheduler {
         }
 
         reservation.expire(now);
-        outboxEventService.saveReservationExpired(reservation);
+        if (serviceMode) seatReleaseService.releaseHeldSeats(reservationId, "EXPIRED");
+        else outboxEventService.saveReservationExpired(reservation);
         return true;
     }
 }
