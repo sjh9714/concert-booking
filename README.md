@@ -1,78 +1,76 @@
 # Concert Booking
 
-**좌석을 누가 소유하는지, 예약이 끝날 때 무엇이 함께 바뀌는지 다룹니다.**
+> 공연을 고르고, 좌석을 예약하고, 예매 내역을 확인하는 콘서트 예매 서비스
 
-공연 선택부터 좌석 선점·테스트 결제·예매 확인까지 실행하는 개인 프로젝트입니다. Java 21, Spring Boot, Spring MVC, JPA, PostgreSQL과 React·TypeScript를 사용합니다. 기본 서비스의 필수 저장소는 PostgreSQL 하나입니다.
+Concert Booking은 공연 목록에서 시작해 좌석 선택과 결제, 예매 확인까지 이어지는 개인 프로젝트입니다. 사용자가 선택한 좌석이 이미 예약됐다면 최신 좌석표에서 다시 고르고, 결제를 마치지 않은 예약은 취소하거나 만료 후 다시 선택할 수 있습니다.
 
-[핵심 판단](#핵심-판단) · [검증 결과](#검증-결과) · [로컬 실행](#로컬-실행) · [코드 읽기](#코드-읽기)
+## 어떤 서비스를 만들었나요?
 
-## 실제 화면
+예매는 '예약 성공' 응답 하나로 끝나지 않습니다. 관객은 남아 있는 좌석을 보고, 결제할 시간을 확보하고, 자신의 예매가 확정됐는지 알아야 합니다.
 
-![Concert Booking 실제 로컬 데모 화면](docs/assets/screens/demo-desktop.png)
+이 프로젝트는 이 흐름을 작은 서비스로 구현합니다. 공연·좌석·관객은 데모 데이터이며, 실제 결제나 티켓 발권 없이 예매 과정을 체험할 수 있습니다.
 
-실제 로컬 API로 좌석을 선점하고 테스트 결제를 완료한 화면입니다. 공연·관객·좌석은 합성 자료이며 실제 청구나 발권은 없습니다.
+## 예매 흐름
+
+1. 가입하거나 로그인한 뒤 공연과 일정을 선택합니다.
+2. 좌석표에서 원하는 좌석을 고르고 예약합니다.
+3. 선점 만료 시각을 확인하고 테스트 결제를 진행합니다.
+4. 예매 내역에서 공연·일정·좌석·결제 상태를 확인합니다.
+5. 결제 전에는 취소할 수 있습니다. 결제하지 않은 선점은 5분 후 만료됩니다.
+
+## 화면과 주요 기능
+
+![Concert Booking의 예매 화면](docs/assets/screens/demo-desktop.png)
+
+실제 로컬 서비스에서 좌석을 선택하고 테스트 결제를 진행한 화면입니다.
+
+| 기능 | 사용자가 할 수 있는 일 |
+|---|---|
+| 공연 찾기 | 공연 목록과 상세 정보에서 일정·좌석을 확인합니다. |
+| 좌석 선택 | 좌석표에서 선택 가능한 좌석을 고릅니다. 이미 선택된 좌석은 다른 좌석으로 변경합니다. |
+| 테스트 결제 | 선점한 예약의 정보를 확인하고 예매를 확정합니다. 실제 카드 정보나 결제 금액은 수집하지 않습니다. |
+| 내 예매 | 자신의 예약·결제 상태를 확인하고 미결제 예약을 취소합니다. |
+| 좌석 반환 | 취소되거나 만료된 미결제 좌석을 다시 예매할 수 있습니다. |
 
 <details>
-<summary>모바일 화면</summary>
+<summary>모바일 예매 화면</summary>
 
-<img src="docs/assets/screens/demo-mobile.png" alt="Concert Booking 모바일 데모 화면" width="360" />
+<img src="docs/assets/screens/demo-mobile.png" alt="Concert Booking 모바일 예매 화면" width="320" />
 
 </details>
 
-## 사용 흐름과 처리 구조
+## 현재 범위
 
-가입 → 공연·좌석 선택 → 선점 → 테스트 결제 → 예매 확인 / 결제 전 취소·만료
+공연 선택부터 테스트 결제·예매 확인, 결제 전 취소·만료까지 제공합니다. 실제 PG 결제, 결제 후 환불, 티켓 발권은 포함하지 않습니다. 기본 실행에서는 대기열을 거치지 않고 좌석을 선택합니다.
 
-![좌석 상태와 소유권을 함께 확인](docs/assets/architecture/request-flow.svg)
+이전의 대기열과 여러 동시성 제어 방식은 별도 실험 자료로 남아 있습니다. 기본 서비스를 체험하기 위한 필수 절차는 아닙니다.
 
-그림 설명: 좌석 선택 → 좌석 잠금 → 소유 예약 기록 → 예약 종료. 각 요청에서 예약 상태와 해당 예약이 소유한 좌석을 하나의 DB 트랜잭션으로 변경합니다.
+## 로컬에서 실행하기
 
-## 핵심 판단
-
-| 문제 | 선택 | 확인한 근거 |
-|---|---|---|
-| A의 오래된 취소 이벤트가 B가 재선점한 좌석을 반환할 수 있었습니다. | 현재 예약 ID를 좌석에 기록하고 확정·반환 시 소유권을 검사합니다. | [Seat](src/main/java/com/concert/booking/domain/Seat.java), [재처리 회귀](src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java) |
-| 다른 좌석도 공유 잔여석 카운터에서 경합했습니다. | 기본 경로는 좌석별 DB 잠금, 잔여석은 좌석 상태로 조회합니다. | [SeatLockReservationService](src/main/java/com/concert/booking/service/reservation/SeatLockReservationService.java) |
-| 취소 완료와 좌석 반환의 시점이 분리돼 있었습니다. | 취소·만료와 좌석 반환을 하나의 트랜잭션으로 처리합니다. | [기본 서비스 통합 테스트](src/test/java/com/concert/booking/integration/ServiceBookingIntegrationTest.java) |
-
-## 검증 결과
-
-2026-10-02 로컬 검증: 백엔드 **106개**, 프론트 단위 **14개**, 실제 API 데스크톱·모바일 **E2E 4개 통과**. 같은 좌석의 중복 성공, 여러 좌석의 부분 성공, 중복 요청, 결제·만료 경쟁, 취소 후 재선점과 과거 이벤트 재처리를 확인했습니다.
-
-단일 로컬 동시 요청 실험에서 같은 좌석 8개 중 성공 1·거절 7, 서로 다른 좌석 8개 중 성공 8·거절 0을 관측했습니다. 워밍업 없는 조건별 1회이며 HTTP 성능 개선율이 아닙니다.
-
-[검증 기록](docs/VERIFICATION.md) · [원표본·조건](docs/evidence/2026-10-02/service-holds/summary.json) · [과거 전략 비교의 해석](docs/PERF_RESULT.md)
-
-## 로컬 실행
+Python 3와 Docker가 필요합니다.
 
 ```bash
 python3 scripts/init-service-env.py
 docker compose --env-file .env.service -p concert-rebuild -f compose.service.yml up -d --build
-curl http://localhost:18082/actuator/health
 ```
 
-`http://localhost:4176`에서 가입한 뒤 예매합니다. 미결제 선점은 5분 후 만료됩니다. 기본 시연에는 Redis 대기열·Kafka가 필요하지 않습니다. 처음 실행할 때 DB 비밀번호·서명 키를 무작위로 생성합니다. `.env.service`는 Git에 올리지 않으며, 초기화 스크립트는 기존 파일을 덮어쓰지 않습니다. 기존 DB를 유지할 때는 같은 비밀번호 파일을 사용합니다.
+`http://localhost:4176`에서 가입 후 예매할 수 있습니다. API는 `http://localhost:18082`입니다. 초기화 스크립트는 로컬 설정을 생성하며, 이미 있는 `.env.service`를 덮어쓰지 않습니다. 이 파일은 Git에 올리지 않습니다.
 
 ```bash
-./gradlew test
-cd web
-npm ci
-npm run test:run
-npm run lint
-npm run build
-npx playwright test -c playwright.service.config.ts
+# 종료하되 로컬 DB 데이터 보존
+docker compose --env-file .env.service -p concert-rebuild -f compose.service.yml stop
 ```
 
-종료: `docker compose --env-file .env.service -p concert-rebuild -f compose.service.yml stop`. DB 볼륨을 보존합니다.
+## 사용 기술
 
-## 범위와 한계
+| 영역 | 기술 |
+|---|---|
+| 웹 | React · TypeScript · Vite |
+| API | Java 21 · Spring Boot · Spring MVC · JPA |
+| 데이터·실행 | PostgreSQL · Docker Compose |
 
-실제 PG·결제 후 환불·발권·대규모 티켓 오픈은 검증하지 않았습니다. 이전의 Redis 대기열·Kafka 반환·세 가지 락 전략은 별도 실험 경로에 보존했습니다. 과거 40%와 100%는 전략별 성공률이며, 혼합 부하 지연을 성공한 예약의 지연 개선으로 표현하지 않습니다.
+## 개발 자료
 
-이번 개인 보강은 AI 지원으로 구현하고 로컬에서 검증했습니다. 코드로 확인한 동작·실험 관측·미검증 범위를 구분하며, 실제로 겪지 않은 운영 장애나 팀 전체 결과를 개인 성과로 표현하지 않습니다.
+[서비스 구조와 실행·테스트](docs/SERVICE_GUIDE.md) · [검증 기록](docs/VERIFICATION.md) · [설계 문서](docs/ARCHITECTURE.md) · [화면 이미지 출처](docs/assets/README.md)
 
-## 코드 읽기
-
-[ReservationController](src/main/java/com/concert/booking/controller/ReservationController.java) → [SeatLockReservationService](src/main/java/com/concert/booking/service/reservation/SeatLockReservationService.java) → [ReservationCreationService](src/main/java/com/concert/booking/service/reservation/ReservationCreationService.java) → [SeatRepository](src/main/java/com/concert/booking/repository/SeatRepository.java). [트랜잭션·실패 조건·변경 과제](docs/SERVICE_GUIDE.md)를 함께 봅니다.
-
-[기존 실험 README](docs/archive/README-before-service.md) · [기존 설계와 현재 모드의 구분](docs/ARCHITECTURE.md)
+개인 프로젝트로 AI 지원 구현과 로컬 검증을 진행했습니다. 기술 선택과 실험의 상세 내용은 개발 문서에 분리해 두었습니다.

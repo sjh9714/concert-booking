@@ -171,7 +171,6 @@ jobs:
         run: |
           python3 - <<'PY'
           import re
-          import struct
           from pathlib import Path
 
           sources = [Path("README.md")] + list(Path("docs").rglob("*.md"))
@@ -189,8 +188,7 @@ jobs:
           readme = Path("README.md").read_text(encoding="utf-8", errors="ignore")
           if "docs/assets/architecture/overall-architecture.svg" in readme:
               raise SystemExit(
-                  "README.md must lead with the real product screen and focused failure stories, "
-                  "not the legacy all-in-one architecture SVG"
+                  "README.md introduces the service; architecture diagrams belong in development docs"
               )
 
           # 현재 기본 서비스 그림은 편집 가능한 SVG이며 구형 실험 그림은 archive에 보존한다.
@@ -199,14 +197,14 @@ jobs:
           ET.parse(svg)
           for reference in (
               "docs/assets/screens/demo-desktop.png",
-              "docs/assets/architecture/request-flow.svg",
               "docs/VERIFICATION.md",
               "docs/SERVICE_GUIDE.md",
           ):
               if reference not in readme or not Path(reference).is_file():
                   raise SystemExit(f"Missing current service evidence: {reference}")
-          if "그림 설명:" not in readme:
-              raise SystemExit("README.md must include the diagram's text description")
+          guide = Path("docs/SERVICE_GUIDE.md").read_text(encoding="utf-8")
+          if "assets/architecture/request-flow.svg" not in guide or "그림 설명:" not in guide:
+              raise SystemExit("SERVICE_GUIDE.md must describe the current request-flow diagram")
 
           print("OK")
           PY
