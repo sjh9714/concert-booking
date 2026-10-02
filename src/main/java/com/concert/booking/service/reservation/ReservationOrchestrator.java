@@ -45,7 +45,8 @@ public class ReservationOrchestrator {
         boolean tokenConsumed = false;
         boolean reservationCommitted = false;
         try {
-            tokenLease = queueTokenGuard.acquire(userId, request.scheduleId(), request.queueToken());
+            boolean queueRequired = strategy.creationMode() != ReservationCreationMode.SEAT_LOCK;
+            if (queueRequired) tokenLease = queueTokenGuard.acquire(userId, request.scheduleId(), request.queueToken());
 
             List<Long> sortedSeatIds = request.seatIds().stream().sorted().toList();
             ReservationCommand command = new ReservationCommand(userId, request, sortedSeatIds, claim.claimId());
@@ -57,7 +58,7 @@ public class ReservationOrchestrator {
             );
 
             reservationCommitted = true;
-            queueTokenGuard.consume(tokenLease);
+            if (tokenLease != null) queueTokenGuard.consume(tokenLease);
             tokenConsumed = true;
 
             return response;

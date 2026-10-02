@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 @Slf4j
+@org.springframework.context.annotation.Profile("!service")
 @Service
 @RequiredArgsConstructor
 public class DistributedLockReservationService implements ReservationService, SeatReservationStrategy {

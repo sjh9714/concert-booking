@@ -37,6 +37,9 @@ public class Seat {
     @Column(nullable = false, length = 20)
     private SeatStatus status;
 
+    @Column(name = "current_reservation_id")
+    private Long currentReservationId;
+
     @Version
     private Long version;
 
@@ -68,6 +71,27 @@ public class Seat {
         this.status = SeatStatus.HELD;
     }
 
+    public void hold(Long reservationId) {
+        java.util.Objects.requireNonNull(reservationId, "좌석 소유 예약이 필요합니다");
+        hold();
+        this.currentReservationId = reservationId;
+    }
+
+    public boolean isHeldBy(Long reservationId) {
+        return status == SeatStatus.HELD && java.util.Objects.equals(currentReservationId, reservationId);
+    }
+
+    public void reserve(Long reservationId) {
+        if (!isHeldBy(reservationId)) throw new IllegalStateException("해당 예약이 선점한 좌석이 아닙니다");
+        reserve();
+    }
+
+    public boolean release(Long reservationId) {
+        if (!isHeldBy(reservationId)) return false;
+        release();
+        return true;
+    }
+
     // HELD → RESERVED
     public void reserve() {
         if (this.status != SeatStatus.HELD) {
@@ -82,5 +106,6 @@ public class Seat {
             throw new IllegalStateException("홀드 상태의 좌석만 반환할 수 있습니다. 현재 상태: " + this.status);
         }
         this.status = SeatStatus.AVAILABLE;
+        this.currentReservationId = null;
     }
 }

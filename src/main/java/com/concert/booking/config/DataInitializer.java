@@ -1,5 +1,6 @@
 package com.concert.booking.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import com.concert.booking.domain.Concert;
 import com.concert.booking.domain.ConcertSchedule;
 import com.concert.booking.domain.Seat;
@@ -50,6 +51,8 @@ public class DataInitializer implements ApplicationRunner {
     private final ConcertScheduleRepository concertScheduleRepository;
     private final SeatRepository seatRepository;
     private final RedisStockService redisStockService;
+    @Value("${reservation.service-mode:false}")
+    private boolean serviceMode;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -157,7 +160,7 @@ public class DataInitializer implements ApplicationRunner {
         // 회차의 잔여 좌석과 Redis 재고를 실제 남은 수로 맞춘다.
         // 이걸 빠뜨리면 화면의 잔여 좌석과 좌석표가 서로 다른 말을 한다.
         schedule.syncAvailableSeats(HALL_TOTAL - sold);
-        redisStockService.initialize(schedule.getId(), false);
+        if (!serviceMode) redisStockService.initialize(schedule.getId(), false);
     }
 
     /**

@@ -1,0 +1,554 @@
+diff --git a/src/main/java/com/concert/booking/config/DataInitializer.java b/src/main/java/com/concert/booking/config/DataInitializer.java
+index 888d5fd..4cb387b 100644
+--- a/src/main/java/com/concert/booking/config/DataInitializer.java
++++ b/src/main/java/com/concert/booking/config/DataInitializer.java
+@@ -50,6 +50,8 @@ public class DataInitializer implements ApplicationRunner {
+     private final ConcertScheduleRepository concertScheduleRepository;
+     private final SeatRepository seatRepository;
+     private final RedisStockService redisStockService;
++    @org.springframework.beans.factory.annotation.Value("${reservation.service-mode:false}")
++    private boolean serviceMode;
+     private final UserRepository userRepository;
+     private final PasswordEncoder passwordEncoder;
+ 
+@@ -157,7 +159,7 @@ public class DataInitializer implements ApplicationRunner {
+         // 회차의 잔여 좌석과 Redis 재고를 실제 남은 수로 맞춘다.
+         // 이걸 빠뜨리면 화면의 잔여 좌석과 좌석표가 서로 다른 말을 한다.
+         schedule.syncAvailableSeats(HALL_TOTAL - sold);
+-        redisStockService.initialize(schedule.getId(), false);
++        if (!serviceMode) redisStockService.initialize(schedule.getId(), false);
+     }
+ 
+     /**
+diff --git a/src/main/java/com/concert/booking/config/ReservationStrategyConfig.java b/src/main/java/com/concert/booking/config/ReservationStrategyConfig.java
+index b5e9df2..01dda31 100644
+--- a/src/main/java/com/concert/booking/config/ReservationStrategyConfig.java
++++ b/src/main/java/com/concert/booking/config/ReservationStrategyConfig.java
+@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
+ import org.springframework.context.annotation.Primary;
+ 
+ @Slf4j
++@org.springframework.context.annotation.Profile("!service")
+ @Configuration
+ public class ReservationStrategyConfig {
+ 
+diff --git a/src/main/java/com/concert/booking/config/SchedulerConfig.java b/src/main/java/com/concert/booking/config/SchedulerConfig.java
+index ef025a8..a031b2c 100644
+--- a/src/main/java/com/concert/booking/config/SchedulerConfig.java
++++ b/src/main/java/com/concert/booking/config/SchedulerConfig.java
+@@ -9,6 +9,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
+ import org.springframework.scheduling.annotation.EnableScheduling;
+ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+ 
++@org.springframework.context.annotation.Profile("!service")
+ @Configuration
+ @EnableScheduling
+ @EnableSchedulerLock(defaultLockAtMostFor = "30s")
+diff --git a/src/main/java/com/concert/booking/controller/AdminController.java b/src/main/java/com/concert/booking/controller/AdminController.java
+index 6935e7b..febc089 100644
+--- a/src/main/java/com/concert/booking/controller/AdminController.java
++++ b/src/main/java/com/concert/booking/controller/AdminController.java
+@@ -21,6 +21,7 @@ import java.util.List;
+ import java.util.Set;
+ 
+ @Slf4j
++@org.springframework.context.annotation.Profile("!service")
+ @RestController
+ @RequestMapping("/api/admin")
+ @RequiredArgsConstructor
+diff --git a/src/main/java/com/concert/booking/controller/LoadTestAdminController.java b/src/main/java/com/concert/booking/controller/LoadTestAdminController.java
+index a771070..44443db 100644
+--- a/src/main/java/com/concert/booking/controller/LoadTestAdminController.java
++++ b/src/main/java/com/concert/booking/controller/LoadTestAdminController.java
+@@ -38,7 +38,7 @@ import java.util.Set;
+ 
+ @Slf4j
+ @RestController
+-@Profile("(load-test | e2e | test) & !prod")
++@Profile("(load-test | e2e | test) & !prod & !service")
+ @RequestMapping("/api/admin/load-test")
+ @RequiredArgsConstructor
+ public class LoadTestAdminController {
+diff --git a/src/main/java/com/concert/booking/controller/QueueController.java b/src/main/java/com/concert/booking/controller/QueueController.java
+index cb85a51..b184cf5 100644
+--- a/src/main/java/com/concert/booking/controller/QueueController.java
++++ b/src/main/java/com/concert/booking/controller/QueueController.java
+@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.concurrent.atomic.AtomicReference;
+ 
+ @Slf4j
++@org.springframework.context.annotation.Profile("!service")
+ @RestController
+ @RequestMapping("/api/queue")
+ public class QueueController {
+diff --git a/src/main/java/com/concert/booking/domain/Seat.java b/src/main/java/com/concert/booking/domain/Seat.java
+index c1888da..b90415e 100644
+--- a/src/main/java/com/concert/booking/domain/Seat.java
++++ b/src/main/java/com/concert/booking/domain/Seat.java
+@@ -37,6 +37,9 @@ public class Seat {
+     @Column(nullable = false, length = 20)
+     private SeatStatus status;
+ 
++    @Column(name = "current_reservation_id")
++    private Long currentReservationId;
++
+     @Version
+     private Long version;
+ 
+@@ -68,6 +71,27 @@ public class Seat {
+         this.status = SeatStatus.HELD;
+     }
+ 
++    public void hold(Long reservationId) {
++        java.util.Objects.requireNonNull(reservationId, "좌석 소유 예약이 필요합니다");
++        hold();
++        this.currentReservationId = reservationId;
++    }
++
++    public boolean isHeldBy(Long reservationId) {
++        return status == SeatStatus.HELD && java.util.Objects.equals(currentReservationId, reservationId);
++    }
++
++    public void reserve(Long reservationId) {
++        if (!isHeldBy(reservationId)) throw new IllegalStateException("해당 예약이 선점한 좌석이 아닙니다");
++        reserve();
++    }
++
++    public boolean release(Long reservationId) {
++        if (!isHeldBy(reservationId)) return false;
++        release();
++        return true;
++    }
++
+     // HELD → RESERVED
+     public void reserve() {
+         if (this.status != SeatStatus.HELD) {
+@@ -82,5 +106,6 @@ public class Seat {
+             throw new IllegalStateException("홀드 상태의 좌석만 반환할 수 있습니다. 현재 상태: " + this.status);
+         }
+         this.status = SeatStatus.AVAILABLE;
++        this.currentReservationId = null;
+     }
+ }
+diff --git a/src/main/java/com/concert/booking/dto/concert/ConcertResponse.java b/src/main/java/com/concert/booking/dto/concert/ConcertResponse.java
+index 63f09c7..84d7208 100644
+--- a/src/main/java/com/concert/booking/dto/concert/ConcertResponse.java
++++ b/src/main/java/com/concert/booking/dto/concert/ConcertResponse.java
+@@ -36,6 +36,10 @@ public record ConcertResponse(
+     }
+ 
+     public static ConcertResponse from(Concert concert, List<ConcertSchedule> schedules) {
++        return from(concert, schedules, schedules.stream().mapToInt(ConcertSchedule::getAvailableSeats).sum());
++    }
++
++    public static ConcertResponse from(Concert concert, List<ConcertSchedule> schedules, int availableSeats) {
+         List<LocalDate> dates = schedules.stream()
+                 .map(ConcertSchedule::getScheduleDate)
+                 .sorted(Comparator.naturalOrder())
+@@ -50,7 +54,7 @@ public record ConcertResponse(
+                 dates.isEmpty() ? null : dates.get(0),
+                 dates.isEmpty() ? null : dates.get(dates.size() - 1),
+                 schedules.size(),
+-                schedules.stream().mapToInt(ConcertSchedule::getAvailableSeats).sum(),
++                availableSeats,
+                 schedules.stream().mapToInt(ConcertSchedule::getTotalSeats).sum()
+         );
+     }
+diff --git a/src/main/java/com/concert/booking/dto/reservation/ReservationRequest.java b/src/main/java/com/concert/booking/dto/reservation/ReservationRequest.java
+index c7e6244..25ecf1d 100644
+--- a/src/main/java/com/concert/booking/dto/reservation/ReservationRequest.java
++++ b/src/main/java/com/concert/booking/dto/reservation/ReservationRequest.java
+@@ -1,7 +1,6 @@
+ package com.concert.booking.dto.reservation;
+ 
+ import jakarta.validation.constraints.NotEmpty;
+-import jakarta.validation.constraints.NotBlank;
+ import jakarta.validation.constraints.NotNull;
+ import jakarta.validation.constraints.Size;
+ 
+@@ -15,7 +14,7 @@ public record ReservationRequest(
+         @Size(max = 4, message = "최대 4석까지 예매 가능합니다.")
+         List<Long> seatIds,
+ 
+-        @NotBlank(message = "입장 토큰은 필수입니다.")
++        // 대기열 토큰은 실험 모드의 QueueTokenGuard가 검증한다.
+         String queueToken
+ ) {
+ }
+diff --git a/src/main/java/com/concert/booking/repository/SeatRepository.java b/src/main/java/com/concert/booking/repository/SeatRepository.java
+index 8842bc7..5d8b6e0 100644
+--- a/src/main/java/com/concert/booking/repository/SeatRepository.java
++++ b/src/main/java/com/concert/booking/repository/SeatRepository.java
+@@ -32,6 +32,12 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
+ 
+     long countByScheduleIdAndStatus(Long scheduleId, SeatStatus status);
+ 
++    long countByScheduleConcertIdAndStatus(Long concertId, SeatStatus status);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("SELECT s FROM Seat s WHERE s.id IN :ids ORDER BY s.id")
++    List<Seat> findAllByIdForUpdate(@Param("ids") List<Long> ids);
++
+     // 비관적 락: 좌석 ID 목록으로 AVAILABLE 좌석 조회 + FOR UPDATE
+     @Lock(LockModeType.PESSIMISTIC_WRITE)
+     @Query("""
+@@ -61,6 +67,6 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
+ 
+     @Modifying
+     @Query(nativeQuery = true,
+-            value = "UPDATE seats SET status = 'AVAILABLE', version = 0 WHERE schedule_id = :scheduleId")
++            value = "UPDATE seats SET status = 'AVAILABLE', current_reservation_id = NULL, version = version + 1 WHERE schedule_id = :scheduleId")
+     void resetSeatsByScheduleId(@Param("scheduleId") Long scheduleId);
+ }
+diff --git a/src/main/java/com/concert/booking/service/concert/ConcertService.java b/src/main/java/com/concert/booking/service/concert/ConcertService.java
+index 9aa83e8..484b8a0 100644
+--- a/src/main/java/com/concert/booking/service/concert/ConcertService.java
++++ b/src/main/java/com/concert/booking/service/concert/ConcertService.java
+@@ -32,14 +32,14 @@ public class ConcertService {
+         // 공연 수가 늘면 회차를 한 번에 가져와 묶는 쪽으로 바꾼다.
+         return concertRepository.findAll().stream()
+                 .map(concert -> ConcertResponse.from(
+-                        concert, concertScheduleRepository.findByConcertId(concert.getId())))
++                        concert, concertScheduleRepository.findByConcertId(concert.getId()), availableForConcert(concert.getId())))
+                 .toList();
+     }
+ 
+     public ConcertResponse getConcert(Long concertId) {
+         Concert concert = concertRepository.findById(concertId)
+                 .orElseThrow(() -> new ResourceNotFoundException("콘서트를 찾을 수 없습니다: " + concertId));
+-        return ConcertResponse.from(concert, concertScheduleRepository.findByConcertId(concertId));
++        return ConcertResponse.from(concert, concertScheduleRepository.findByConcertId(concertId), availableForConcert(concertId));
+     }
+ 
+     public List<ConcertScheduleResponse> getSchedules(Long concertId) {
+@@ -48,10 +48,17 @@ public class ConcertService {
+         }
+         List<ConcertSchedule> schedules = concertScheduleRepository.findByConcertId(concertId);
+         return schedules.stream()
+-                .map(ConcertScheduleResponse::from)
++                .map(schedule -> new ConcertScheduleResponse(schedule.getId(), concertId, schedule.getScheduleDate(),
++                        schedule.getStartTime(), schedule.getTotalSeats(),
++                        (int) seatRepository.countByScheduleIdAndStatus(schedule.getId(), com.concert.booking.domain.SeatStatus.AVAILABLE),
++                        com.concert.booking.common.util.ApiTime.ZONE_ID))
+                 .toList();
+     }
+ 
++    private int availableForConcert(Long concertId) {
++        return (int) seatRepository.countByScheduleConcertIdAndStatus(concertId, com.concert.booking.domain.SeatStatus.AVAILABLE);
++    }
++
+     public List<SeatResponse> getSeats(Long concertId, Long scheduleId) {
+         ConcertSchedule schedule = concertScheduleRepository.findById(scheduleId)
+                 .orElseThrow(() -> new ResourceNotFoundException("스케줄을 찾을 수 없습니다: " + scheduleId));
+diff --git a/src/main/java/com/concert/booking/service/payment/PaymentService.java b/src/main/java/com/concert/booking/service/payment/PaymentService.java
+index b758de2..d8057d1 100644
+--- a/src/main/java/com/concert/booking/service/payment/PaymentService.java
++++ b/src/main/java/com/concert/booking/service/payment/PaymentService.java
+@@ -34,6 +34,9 @@ public class PaymentService {
+     private final ReservationSeatRepository reservationSeatRepository;
+     private final PaymentRepository paymentRepository;
+     private final OutboxEventService outboxEventService;
++    private final com.concert.booking.repository.SeatRepository seatRepository;
++    @org.springframework.beans.factory.annotation.Value("${reservation.service-mode:false}")
++    private boolean serviceMode;
+ 
+     @Transactional
+     public PaymentResponse pay(Long userId, PaymentRequest request, String idempotencyKey) {
+@@ -81,11 +84,12 @@ public class PaymentService {
+ 
+         // 좌석 상태: HELD → RESERVED
+         List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservation.getId());
+-        for (ReservationSeat rs : reservationSeats) {
+-            rs.getSeat().reserve();
++        var seatIds = reservationSeats.stream().map(rs -> rs.getSeat().getId()).sorted().toList();
++        for (var seat : seatRepository.findAllByIdForUpdate(seatIds)) {
++            seat.reserve(reservation.getId());
+         }
+ 
+-        outboxEventService.saveReservationConfirmed(reservation);
++        if (!serviceMode) outboxEventService.saveReservationConfirmed(reservation);
+ 
+         return PaymentResponse.from(payment);
+     }
+diff --git a/src/main/java/com/concert/booking/service/reservation/DistributedLockReservationService.java b/src/main/java/com/concert/booking/service/reservation/DistributedLockReservationService.java
+index 87c6d26..24c2402 100644
+--- a/src/main/java/com/concert/booking/service/reservation/DistributedLockReservationService.java
++++ b/src/main/java/com/concert/booking/service/reservation/DistributedLockReservationService.java
+@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
+ import java.util.function.Supplier;
+ 
+ @Slf4j
++@org.springframework.context.annotation.Profile("!service")
+ @Service
+ @RequiredArgsConstructor
+ public class DistributedLockReservationService implements ReservationService, SeatReservationStrategy {
+diff --git a/src/main/java/com/concert/booking/service/reservation/ReservationCancellationService.java b/src/main/java/com/concert/booking/service/reservation/ReservationCancellationService.java
+index 3880d72..d87ef97 100644
+--- a/src/main/java/com/concert/booking/service/reservation/ReservationCancellationService.java
++++ b/src/main/java/com/concert/booking/service/reservation/ReservationCancellationService.java
+@@ -19,6 +19,9 @@ public class ReservationCancellationService {
+ 
+     private final ReservationRepository reservationRepository;
+     private final OutboxEventService outboxEventService;
++    private final SeatReleaseService seatReleaseService;
++    @org.springframework.beans.factory.annotation.Value("${reservation.service-mode:false}")
++    private boolean serviceMode;
+ 
+     @Transactional
+     public void cancel(Long userId, Long reservationId) {
+@@ -38,6 +41,7 @@ public class ReservationCancellationService {
+         }
+ 
+         reservation.cancel();
+-        outboxEventService.saveReservationCancelled(reservation);
++        if (serviceMode) seatReleaseService.releaseHeldSeats(reservationId, "USER_CANCELLED");
++        else outboxEventService.saveReservationCancelled(reservation);
+     }
+ }
+diff --git a/src/main/java/com/concert/booking/service/reservation/ReservationCreationMode.java b/src/main/java/com/concert/booking/service/reservation/ReservationCreationMode.java
+index 50e568a..735c11c 100644
+--- a/src/main/java/com/concert/booking/service/reservation/ReservationCreationMode.java
++++ b/src/main/java/com/concert/booking/service/reservation/ReservationCreationMode.java
+@@ -1,6 +1,7 @@
+ package com.concert.booking.service.reservation;
+ 
+ public enum ReservationCreationMode {
++    SEAT_LOCK,
+     PESSIMISTIC,
+     OPTIMISTIC,
+     DISTRIBUTED
+diff --git a/src/main/java/com/concert/booking/service/reservation/ReservationCreationService.java b/src/main/java/com/concert/booking/service/reservation/ReservationCreationService.java
+index 2db091e..e7d3ec6 100644
+--- a/src/main/java/com/concert/booking/service/reservation/ReservationCreationService.java
++++ b/src/main/java/com/concert/booking/service/reservation/ReservationCreationService.java
+@@ -51,12 +51,11 @@ public class ReservationCreationService {
+             throw new SeatNotAvailableException("선택한 좌석 중 이미 예매된 좌석이 있습니다.");
+         }
+ 
+-        seats.forEach(Seat::hold);
+-
+         int totalAmount = seats.stream().mapToInt(Seat::getPrice).sum();
+         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(HOLD_MINUTES);
+         Reservation reservation = Reservation.create(user, schedule, totalAmount, expiresAt);
+         reservationRepository.save(reservation);
++        seats.forEach(seat -> seat.hold(reservation.getId()));
+ 
+         for (Seat seat : seats) {
+             ReservationSeat reservationSeat = ReservationSeat.create(reservation, seat);
+@@ -64,9 +63,9 @@ public class ReservationCreationService {
+             reservation.addReservationSeat(reservationSeat);
+         }
+ 
+-        schedule.decreaseAvailableSeats(seats.size());
++        if (mode != ReservationCreationMode.SEAT_LOCK) schedule.decreaseAvailableSeats(seats.size());
+         reservationIdempotencyService.complete(command.claimId(), reservation);
+-        outboxEventService.saveReservationCreated(reservation);
++        if (mode != ReservationCreationMode.SEAT_LOCK) outboxEventService.saveReservationCreated(reservation);
+ 
+         if (mode == ReservationCreationMode.DISTRIBUTED) {
+             for (Seat seat : seats) {
+@@ -85,14 +84,14 @@ public class ReservationCreationService {
+         return switch (mode) {
+             case PESSIMISTIC, DISTRIBUTED -> concertScheduleRepository.findByIdForUpdate(scheduleId)
+                     .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
+-            case OPTIMISTIC -> concertScheduleRepository.findById(scheduleId)
++            case SEAT_LOCK, OPTIMISTIC -> concertScheduleRepository.findById(scheduleId)
+                     .orElseThrow(() -> new IllegalArgumentException("스케줄을 찾을 수 없습니다."));
+         };
+     }
+ 
+     private List<Seat> findAvailableSeats(ReservationCommand command, ReservationCreationMode mode) {
+         return switch (mode) {
+-            case PESSIMISTIC -> seatRepository.findAllByScheduleIdAndIdInAndAvailableForUpdate(
++            case SEAT_LOCK, PESSIMISTIC -> seatRepository.findAllByScheduleIdAndIdInAndAvailableForUpdate(
+                     command.request().scheduleId(),
+                     command.sortedSeatIds()
+             );
+diff --git a/src/main/java/com/concert/booking/service/reservation/ReservationExpirationScheduler.java b/src/main/java/com/concert/booking/service/reservation/ReservationExpirationScheduler.java
+index 16c93e5..9340cd2 100644
+--- a/src/main/java/com/concert/booking/service/reservation/ReservationExpirationScheduler.java
++++ b/src/main/java/com/concert/booking/service/reservation/ReservationExpirationScheduler.java
+@@ -23,6 +23,9 @@ public class ReservationExpirationScheduler {
+ 
+     private final ReservationRepository reservationRepository;
+     private final OutboxEventService outboxEventService;
++    private final SeatReleaseService seatReleaseService;
++    @org.springframework.beans.factory.annotation.Value("${reservation.service-mode:false}")
++    private boolean serviceMode;
+     private final TransactionTemplate transactionTemplate;
+ 
+     @Value("${reservation.expiration.batch-size:100}")
+@@ -69,7 +72,8 @@ public class ReservationExpirationScheduler {
+         }
+ 
+         reservation.expire(now);
+-        outboxEventService.saveReservationExpired(reservation);
++        if (serviceMode) seatReleaseService.releaseHeldSeats(reservationId, "EXPIRED");
++        else outboxEventService.saveReservationExpired(reservation);
+         return true;
+     }
+ }
+diff --git a/src/main/java/com/concert/booking/service/reservation/ReservationOrchestrator.java b/src/main/java/com/concert/booking/service/reservation/ReservationOrchestrator.java
+index f30e4f2..0c920eb 100644
+--- a/src/main/java/com/concert/booking/service/reservation/ReservationOrchestrator.java
++++ b/src/main/java/com/concert/booking/service/reservation/ReservationOrchestrator.java
+@@ -45,7 +45,8 @@ public class ReservationOrchestrator {
+         boolean tokenConsumed = false;
+         boolean reservationCommitted = false;
+         try {
+-            tokenLease = queueTokenGuard.acquire(userId, request.scheduleId(), request.queueToken());
++            boolean queueRequired = strategy.creationMode() != ReservationCreationMode.SEAT_LOCK;
++            if (queueRequired) tokenLease = queueTokenGuard.acquire(userId, request.scheduleId(), request.queueToken());
+ 
+             List<Long> sortedSeatIds = request.seatIds().stream().sorted().toList();
+             ReservationCommand command = new ReservationCommand(userId, request, sortedSeatIds, claim.claimId());
+@@ -57,7 +58,7 @@ public class ReservationOrchestrator {
+             );
+ 
+             reservationCommitted = true;
+-            queueTokenGuard.consume(tokenLease);
++            if (tokenLease != null) queueTokenGuard.consume(tokenLease);
+             tokenConsumed = true;
+ 
+             return response;
+diff --git a/src/main/java/com/concert/booking/service/reservation/SeatReleaseService.java b/src/main/java/com/concert/booking/service/reservation/SeatReleaseService.java
+index 1cbbc3f..d5355d0 100644
+--- a/src/main/java/com/concert/booking/service/reservation/SeatReleaseService.java
++++ b/src/main/java/com/concert/booking/service/reservation/SeatReleaseService.java
+@@ -2,8 +2,6 @@ package com.concert.booking.service.reservation;
+ 
+ import com.concert.booking.common.util.RedisKeyUtil;
+ import com.concert.booking.domain.Reservation;
+-import com.concert.booking.domain.ReservationSeat;
+-import com.concert.booking.domain.SeatStatus;
+ import com.concert.booking.repository.ReservationRepository;
+ import com.concert.booking.repository.ReservationSeatRepository;
+ import lombok.RequiredArgsConstructor;
+@@ -22,6 +20,9 @@ public class SeatReleaseService {
+     private final ReservationRepository reservationRepository;
+     private final ReservationSeatRepository reservationSeatRepository;
+     private final RedisTemplate<String, String> redisTemplate;
++    private final com.concert.booking.repository.SeatRepository seatRepository;
++    @org.springframework.beans.factory.annotation.Value("${reservation.service-mode:false}")
++    private boolean serviceMode;
+ 
+     @Transactional
+     public SeatReleaseResult releaseHeldSeats(Long reservationId, String reason) {
+@@ -31,18 +32,20 @@ public class SeatReleaseService {
+             return new SeatReleaseResult(reservationId, 0, false);
+         }
+ 
+-        List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservationId);
++        if (reservation.getStatus() != com.concert.booking.domain.ReservationStatus.CANCELLED
++                && reservation.getStatus() != com.concert.booking.domain.ReservationStatus.EXPIRED) {
++            return new SeatReleaseResult(reservationId, 0, true);
++        }
++        List<Long> seatIds = reservationSeatRepository.findByReservationId(reservationId).stream()
++                .map(rs -> rs.getSeat().getId()).sorted().toList();
+         int releasedCount = 0;
+-
+-        for (ReservationSeat rs : reservationSeats) {
+-            if (rs.getSeat().getStatus() == SeatStatus.HELD) {
+-                rs.getSeat().release();
++        for (var seat : seatRepository.findAllByIdForUpdate(seatIds)) {
++            if (seat.release(reservationId)) {
+                 releasedCount++;
+-                redisTemplate.delete(RedisKeyUtil.seatHoldKey(rs.getSeat().getId()));
++                if (!serviceMode) redisTemplate.delete(RedisKeyUtil.seatHoldKey(seat.getId()));
+             }
+         }
+-
+-        if (releasedCount > 0) {
++        if (!serviceMode && releasedCount > 0) {
+             reservation.getSchedule().increaseAvailableSeats(releasedCount);
+             incrementRedisStockIfPresent(reservation.getSchedule().getId(), releasedCount);
+         }
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+index 18e938c..66990eb 100644
+--- a/src/main/resources/application.yml
++++ b/src/main/resources/application.yml
+@@ -1,4 +1,6 @@
+ spring:
++  profiles:
++    default: service
+   jackson:
+     time-zone: Asia/Seoul
+ 
+diff --git a/src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java b/src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java
+index f3af8d0..feaecdc 100644
+--- a/src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java
++++ b/src/test/java/com/concert/booking/integration/KafkaDltReplayIntegrationTest.java
+@@ -80,6 +80,7 @@ class KafkaDltReplayIntegrationTest {
+     @DisplayName("consumer 실패 메시지는 DLT로 이동하고 replay 후 좌석 반환이 멱등적으로 성공한다")
+     void failed_cancelled_event_moves_to_dlt_and_replay_releases_seat_once() throws Exception {
+         Scenario failedScenario = createPendingScenario();
++        reservationService.cancelReservation(failedScenario.userId(), failedScenario.reservationId());
+         ReservationCancelledEvent failedEvent = event(failedScenario.reservationId(), failedScenario, "FORCE_DLT");
+ 
+         failurePolicy.failForceDlt.set(true);
+@@ -103,6 +104,7 @@ class KafkaDltReplayIntegrationTest {
+         assertThat(redisTemplate.opsForValue().get(RedisKeyUtil.stockKey(failedScenario.scheduleId()))).isEqualTo("1");
+ 
+         Scenario normalScenario = createPendingScenario();
++        reservationService.cancelReservation(normalScenario.userId(), normalScenario.reservationId());
+         ReservationCancelledEvent normalEvent = event(normalScenario.reservationId(), normalScenario, "USER_CANCELLED");
+         kafkaTemplate.send("reservation.cancelled", String.valueOf(normalScenario.reservationId()), normalEvent).get(5, TimeUnit.SECONDS);
+ 
+diff --git a/src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java b/src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java
+index 10cc815..a9965fc 100644
+--- a/src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java
++++ b/src/test/java/com/concert/booking/integration/SeatReleaseIdempotencyIntegrationTest.java
+@@ -37,6 +37,7 @@ class SeatReleaseIdempotencyIntegrationTest {
+ 
+     @Autowired private ReservationService reservationService;
+     @Autowired private PaymentService paymentService;
++    @Autowired private com.concert.booking.service.reservation.ReservationExpirationScheduler expiration;
+     @Autowired private QueueService queueService;
+     @Autowired private SeatReleaseConsumer seatReleaseConsumer;
+     @Autowired private UserRepository userRepository;
+@@ -48,11 +49,29 @@ class SeatReleaseIdempotencyIntegrationTest {
+     @Autowired private PasswordEncoder passwordEncoder;
+     @Autowired private RedisTemplate<String, String> redisTemplate;
+ 
++    @Test
++    void replaying_old_cancellation_must_not_release_the_next_reservations_seat() {
++        Scenario scenario = createScenario();
++        Long first = createPendingReservation(scenario);
++        reservationService.cancelReservation(scenario.userId(), first);
++        ReservationCancelledEvent oldEvent = event(first, scenario, "USER_CANCELLED");
++        seatReleaseConsumer.handleCancelledReservation(oldEvent, ack());
++
++        Long second = createPendingReservation(scenario);
++        seatReleaseConsumer.handleCancelledReservation(oldEvent, ack());
++
++        assertThat(reservationRepository.findById(second).orElseThrow().getStatus()).isEqualTo(ReservationStatus.PENDING);
++        assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.HELD);
++        assertThat(concertScheduleRepository.findById(scenario.scheduleId()).orElseThrow().getAvailableSeats()).isZero();
++        assertThat(redisTemplate.opsForValue().get(RedisKeyUtil.seatHoldKey(scenario.seatId()))).isEqualTo(second.toString());
++    }
++
+     @Test
+     @DisplayName("동일 reservation.cancelled 이벤트 2회 처리 시 좌석과 재고는 1회만 복구된다")
+     void duplicate_cancelled_event_restores_inventory_once() {
+         Scenario scenario = createScenario();
+         Long reservationId = createPendingReservation(scenario);
++        reservationService.cancelReservation(scenario.userId(), reservationId);
+         ReservationCancelledEvent event = event(reservationId, scenario, "USER_CANCELLED");
+ 
+         seatReleaseConsumer.handleCancelledReservation(event, ack());
+@@ -83,6 +102,7 @@ class SeatReleaseIdempotencyIntegrationTest {
+         Scenario scenario = createScenario();
+         Long reservationId = createPendingReservation(scenario);
+ 
++        expiration.expireReservation(reservationId, LocalDateTime.now().plusMinutes(6));
+         seatReleaseConsumer.handleCancelledReservation(event(reservationId, scenario, "EXPIRED"), ack());
+ 
+         assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.AVAILABLE);
+@@ -97,6 +117,7 @@ class SeatReleaseIdempotencyIntegrationTest {
+         Long reservationId = createPendingReservation(scenario);
+         redisTemplate.delete(RedisKeyUtil.seatHoldKey(scenario.seatId()));
+ 
++        expiration.expireReservation(reservationId, LocalDateTime.now().plusMinutes(6));
+         seatReleaseConsumer.handleCancelledReservation(event(reservationId, scenario, "EXPIRED"), ack());
+ 
+         assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.AVAILABLE);

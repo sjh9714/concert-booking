@@ -1,0 +1,31 @@
+{
+  "same-seat": {
+    "requests": 8,
+    "successes": 1,
+    "failures": 7
+  },
+  "different-seats": {
+    "requests": 8,
+    "successes": 8,
+    "failures": 0
+  },
+  "suite": {
+    "tests": 106,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "base_commit": "96c0708a8f6dbf1c8642af97eb5119904ce5911a",
+  "revision": "Uncommitted local implementation; see source.patch and untracked source copies.",
+  "conditions": {
+    "database": "PostgreSQL 16 (Testcontainers)",
+    "concurrency": 8,
+    "warmup": 0,
+    "repetitions": 1,
+    "measurement": "Java service call elapsed nanoseconds, includes transaction; not HTTP or production load",
+    "profiles": [
+      "test",
+      "service"
+    ]
+  }
+}

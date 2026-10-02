@@ -57,6 +57,9 @@ export function ReservationPage() {
       clearIdempotencyKey(paymentScope);
       void queryClient.invalidateQueries({ queryKey: ["reservation", id] });
       void queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      void queryClient.invalidateQueries({ queryKey: ["seats"] });
+      void queryClient.invalidateQueries({ queryKey: ["concert"] });
+      void queryClient.invalidateQueries({ queryKey: ["concerts"] });
     },
   });
 
@@ -69,6 +72,9 @@ export function ReservationPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["reservation", id] });
       void queryClient.invalidateQueries({ queryKey: ["reservations"] });
+      void queryClient.invalidateQueries({ queryKey: ["seats"] });
+      void queryClient.invalidateQueries({ queryKey: ["concert"] });
+      void queryClient.invalidateQueries({ queryKey: ["concerts"] });
     },
   });
 
@@ -158,7 +164,8 @@ export function ReservationPage() {
           </button>
         )}
       </footer>
-      {cancel.isSuccess && <p className="form-note" role="status">취소 요청이 반영되었습니다. 좌석은 곧 목록에 돌아옵니다.</p>}
+      {cancel.isError && <p className="form-error" role="alert">{cancel.error.message}</p>}
+      {cancel.isSuccess && <p className="form-note" role="status">{import.meta.env.VITE_QUEUE_ENABLED === "true" ? "취소 요청이 반영되었습니다. 좌석은 곧 목록에 돌아옵니다." : "취소되었습니다. 좌석이 반환되었습니다."}</p>}
     </main>
   );
 }

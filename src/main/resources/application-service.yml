@@ -1,0 +1,20 @@
+# 기본 데모는 PostgreSQL만으로 예약·종료·좌석 변경을 커밋한다.
+spring:
+  autoconfigure:
+    exclude: org.redisson.spring.starter.RedissonAutoConfigurationV2
+  kafka:
+    listener:
+      auto-startup: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+reservation:
+  service-mode: true
+outbox:
+  relay:
+    enabled: false
+management:
+  health:
+    redis:
+      enabled: false

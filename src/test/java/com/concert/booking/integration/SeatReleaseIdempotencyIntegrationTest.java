@@ -37,6 +37,7 @@ class SeatReleaseIdempotencyIntegrationTest {
 
     @Autowired private ReservationService reservationService;
     @Autowired private PaymentService paymentService;
+    @Autowired private com.concert.booking.service.reservation.ReservationExpirationScheduler expiration;
     @Autowired private QueueService queueService;
     @Autowired private SeatReleaseConsumer seatReleaseConsumer;
     @Autowired private UserRepository userRepository;
@@ -49,10 +50,28 @@ class SeatReleaseIdempotencyIntegrationTest {
     @Autowired private RedisTemplate<String, String> redisTemplate;
 
     @Test
+    void replaying_old_cancellation_must_not_release_the_next_reservations_seat() {
+        Scenario scenario = createScenario();
+        Long first = createPendingReservation(scenario);
+        reservationService.cancelReservation(scenario.userId(), first);
+        ReservationCancelledEvent oldEvent = event(first, scenario, "USER_CANCELLED");
+        seatReleaseConsumer.handleCancelledReservation(oldEvent, ack());
+
+        Long second = createPendingReservation(scenario);
+        seatReleaseConsumer.handleCancelledReservation(oldEvent, ack());
+
+        assertThat(reservationRepository.findById(second).orElseThrow().getStatus()).isEqualTo(ReservationStatus.PENDING);
+        assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.HELD);
+        assertThat(concertScheduleRepository.findById(scenario.scheduleId()).orElseThrow().getAvailableSeats()).isZero();
+        assertThat(redisTemplate.opsForValue().get(RedisKeyUtil.seatHoldKey(scenario.seatId()))).isEqualTo(second.toString());
+    }
+
+    @Test
     @DisplayName("동일 reservation.cancelled 이벤트 2회 처리 시 좌석과 재고는 1회만 복구된다")
     void duplicate_cancelled_event_restores_inventory_once() {
         Scenario scenario = createScenario();
         Long reservationId = createPendingReservation(scenario);
+        reservationService.cancelReservation(scenario.userId(), reservationId);
         ReservationCancelledEvent event = event(reservationId, scenario, "USER_CANCELLED");
 
         seatReleaseConsumer.handleCancelledReservation(event, ack());
@@ -83,6 +102,7 @@ class SeatReleaseIdempotencyIntegrationTest {
         Scenario scenario = createScenario();
         Long reservationId = createPendingReservation(scenario);
 
+        expiration.expireReservation(reservationId, LocalDateTime.now().plusMinutes(6));
         seatReleaseConsumer.handleCancelledReservation(event(reservationId, scenario, "EXPIRED"), ack());
 
         assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.AVAILABLE);
@@ -97,6 +117,7 @@ class SeatReleaseIdempotencyIntegrationTest {
         Long reservationId = createPendingReservation(scenario);
         redisTemplate.delete(RedisKeyUtil.seatHoldKey(scenario.seatId()));
 
+        expiration.expireReservation(reservationId, LocalDateTime.now().plusMinutes(6));
         seatReleaseConsumer.handleCancelledReservation(event(reservationId, scenario, "EXPIRED"), ack());
 
         assertThat(seatRepository.findById(scenario.seatId()).orElseThrow().getStatus()).isEqualTo(SeatStatus.AVAILABLE);

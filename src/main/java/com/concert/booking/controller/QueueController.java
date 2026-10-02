@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
+@org.springframework.context.annotation.Profile("!service")
 @RestController
 @RequestMapping("/api/queue")
 public class QueueController {

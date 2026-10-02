@@ -1,3 +1,5 @@
+> 기존 Redis·Kafka·락 전략 실험의 참고 문서입니다. 기본 `service` 모드의 흐름·보장 범위·읽는 순서는 [SERVICE_GUIDE.md](SERVICE_GUIDE.md)를 우선합니다.
+
 # Concert Booking Architecture
 
 이 문서는 전체 기술 스택을 한 장에 나열하지 않습니다. 실제 예약 흐름에서 서로 다른 두 질문만 분리해

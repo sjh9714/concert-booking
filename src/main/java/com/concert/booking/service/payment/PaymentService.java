@@ -1,5 +1,7 @@
 package com.concert.booking.service.payment;
 
+import com.concert.booking.repository.SeatRepository;
+import org.springframework.beans.factory.annotation.Value;
 import com.concert.booking.common.exception.BadRequestException;
 import com.concert.booking.common.exception.ConflictException;
 import com.concert.booking.common.exception.InvalidReservationStateException;
@@ -34,6 +36,9 @@ public class PaymentService {
     private final ReservationSeatRepository reservationSeatRepository;
     private final PaymentRepository paymentRepository;
     private final OutboxEventService outboxEventService;
+    private final SeatRepository seatRepository;
+    @Value("${reservation.service-mode:false}")
+    private boolean serviceMode;
 
     @Transactional
     public PaymentResponse pay(Long userId, PaymentRequest request, String idempotencyKey) {
@@ -81,11 +86,12 @@ public class PaymentService {
 
         // 좌석 상태: HELD → RESERVED
         List<ReservationSeat> reservationSeats = reservationSeatRepository.findByReservationId(reservation.getId());
-        for (ReservationSeat rs : reservationSeats) {
-            rs.getSeat().reserve();
+        var seatIds = reservationSeats.stream().map(rs -> rs.getSeat().getId()).sorted().toList();
+        for (var seat : seatRepository.findAllByIdForUpdate(seatIds)) {
+            seat.reserve(reservation.getId());
         }
 
-        outboxEventService.saveReservationConfirmed(reservation);
+        if (!serviceMode) outboxEventService.saveReservationConfirmed(reservation);
 
         return PaymentResponse.from(payment);
     }

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Set;
 
 @Slf4j
+@org.springframework.context.annotation.Profile("!service")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor

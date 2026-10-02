@@ -15,6 +15,8 @@ import {
   readQueueToken,
 } from "../lib/session";
 
+const queueEnabled = import.meta.env.VITE_QUEUE_ENABLED === "true";
+
 export function SeatsPage() {
   const { scheduleId = "" } = useParams();
   const schedule = Number(scheduleId);
@@ -36,7 +38,7 @@ export function SeatsPage() {
         token: session?.token,
         schema: seatListSchema,
       }),
-    enabled: Boolean(session && queueToken && Number.isFinite(concertId)),
+    enabled: Boolean(session && (!queueEnabled || queueToken) && Number.isFinite(concertId)),
     refetchInterval: 5000,
   });
 
@@ -48,13 +50,13 @@ export function SeatsPage() {
 
   const reserve = useMutation({
     mutationFn: async () => {
-      if (!session || !queueToken) throw new Error("입장 정보가 만료되었습니다.");
+      if (!session || (queueEnabled && !queueToken)) throw new Error("입장 정보가 만료되었습니다.");
       const fingerprint = `${schedule}:${[...selectedIds].sort((a, b) => a - b).join("-")}`;
       return apiFetch("/api/reservations", {
         method: "POST",
         token: session.token,
         headers: { "Idempotency-Key": idempotencyKey(`reservation.${fingerprint}`) },
-        body: { scheduleId: schedule, seatIds: selectedIds, queueToken: queueToken.token },
+        body: { scheduleId: schedule, seatIds: selectedIds, queueToken: queueEnabled ? queueToken?.token : undefined },
         schema: reservationSummarySchema,
       });
     },
@@ -83,7 +85,7 @@ export function SeatsPage() {
 
   if (!session) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   if (leaving) return <LoadingState label="예매 상세로 이동하는 중" />;
-  if (!queueToken) return <Navigate to={`/queue/${schedule}${Number.isFinite(concertId) ? `?concert=${concertId}` : ""}`} replace />;
+  if (queueEnabled && !queueToken) return <Navigate to={`/queue/${schedule}${Number.isFinite(concertId) ? `?concert=${concertId}` : ""}`} replace />;
   if (seats.isLoading) return <LoadingState label="좌석 상태를 확인하는 중" />;
   if (seats.isError || !seats.data) return <ErrorState>좌석 정보를 불러오지 못했습니다.</ErrorState>;
 
