@@ -55,6 +55,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # main merge commits need their first parent for a real change comparison.
+          fetch-depth: 2
 
       - name: Set up Java
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -82,7 +85,11 @@ jobs:
               git diff-tree --check --no-commit-id -r HEAD
             fi
           else
-            git diff-tree --check --no-commit-id --root -r HEAD
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              git diff --check HEAD^ HEAD
+            else
+              git diff-tree --check --no-commit-id --root -r HEAD
+            fi
           fi
 
       - name: Check collapsed files
