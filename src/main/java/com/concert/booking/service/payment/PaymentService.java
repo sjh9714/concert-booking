@@ -77,7 +77,7 @@ public class PaymentService {
             throw new PaymentException("예매가 만료되었습니다. 다시 예매해주세요.");
         }
 
-        // 결제 생성 (mock PG — 즉시 COMPLETED)
+        // 결제 생성 (mock PG: 즉시 COMPLETED)
         Payment payment = Payment.create(reservation, reservation.getTotalAmount(), idempotencyKey);
         paymentRepository.save(payment);
 

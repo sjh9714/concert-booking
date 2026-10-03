@@ -13,7 +13,7 @@
     .m{fill:#9aa0b0;font:11px ui-monospace,Menlo,monospace}
     .ln{stroke:#8a90a3;stroke-width:1.5;fill:none}
   </style>
-  <text x="24" y="36" class="m">예약 요청의 경로 — 락 전략 3종 비교와 이벤트 복구</text>
+  <text x="24" y="36" class="m">예약 요청의 경로: 락 전략 3종 비교와 이벤트 복구</text>
 
   <rect x="24" y="64" width="110" height="56" rx="10" class="box"/>
   <text x="79" y="96" text-anchor="middle" class="t">클라이언트</text>

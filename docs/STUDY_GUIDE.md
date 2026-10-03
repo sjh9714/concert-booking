@@ -1,6 +1,6 @@
 > 기존 Redis·Kafka·락 전략 실험의 참고 문서입니다. 기본 `service` 모드의 흐름·보장 범위·읽는 순서는 [SERVICE_GUIDE.md](SERVICE_GUIDE.md)를 우선합니다.
 
-# 콘서트 좌석 예매 시스템 — 완전 학습 가이드
+# 콘서트 좌석 예매 시스템: 완전 학습 가이드
 
 > 이 문서 하나로 프로젝트의 모든 것을 이해할 수 있도록 작성했습니다.
 > 코드를 직접 따라가며 읽으면 가장 효과적입니다.
@@ -13,14 +13,14 @@
 1. [프로젝트 한 줄 요약](#1-프로젝트-한-줄-요약)
 2. [기술 스택과 각각의 역할](#2-기술-스택과-각각의-역할)
 3. [인프라 구성 (Docker Compose)](#3-인프라-구성-docker-compose)
-4. [패키지 구조 — 왜 이렇게 나눴는가](#4-패키지-구조--왜-이렇게-나눴는가)
+4. [패키지 구조: 왜 이렇게 나눴는가](#4-패키지-구조-왜-이렇게-나눴는가)
 5. [데이터베이스 설계 (7개 테이블)](#5-데이터베이스-설계-7개-테이블)
 
 ### Part 2. 도메인과 비즈니스 로직
-6. [도메인 엔티티 — Rich Domain Model](#6-도메인-엔티티--rich-domain-model)
+6. [도메인 엔티티: Rich Domain Model](#6-도메인-엔티티-rich-domain-model)
 7. [좌석 상태 머신 (State Machine)](#7-좌석-상태-머신-state-machine)
-8. [JWT 인증 — 요청이 처리되기까지](#8-jwt-인증--요청이-처리되기까지)
-9. [예매 흐름 — 핵심 비즈니스 로직](#9-예매-흐름--핵심-비즈니스-로직)
+8. [JWT 인증: 요청이 처리되기까지](#8-jwt-인증-요청이-처리되기까지)
+9. [예매 흐름: 핵심 비즈니스 로직](#9-예매-흐름-핵심-비즈니스-로직)
 10. [결제 흐름](#10-결제-흐름)
 11. [예외 처리 설계](#11-예외-처리-설계)
 
@@ -28,18 +28,18 @@
 12. [동시성 문제란 무엇인가](#12-동시성-문제란-무엇인가)
 13. [전략 1: 비관적 락 (Pessimistic Lock)](#13-전략-1-비관적-락-pessimistic-lock)
 14. [전략 2: 낙관적 락 (Optimistic Lock)](#14-전략-2-낙관적-락-optimistic-lock)
-15. [비관적 락 vs 낙관적 락 — 완전 비교](#15-비관적-락-vs-낙관적-락--완전-비교)
+15. [비관적 락 vs 낙관적 락: 완전 비교](#15-비관적-락-vs-낙관적-락-완전-비교)
 16. [전략 패턴으로 락 전략 교체하기](#16-전략-패턴으로-락-전략-교체하기)
 
 ### Part 4. Redis 분산 락 + 대기열 + Kafka (3차)
 17. [전략 3: Redis 분산 락 (Redisson)](#17-전략-3-redis-분산-락-redisson)
-18. [대기열 시스템 — Redis Sorted Set + SSE](#18-대기열-시스템--redis-sorted-set--sse)
+18. [대기열 시스템: Redis Sorted Set + SSE](#18-대기열-시스템-redis-sorted-set--sse)
 19. [Kafka 이벤트 기반 아키텍처](#19-kafka-이벤트-기반-아키텍처)
-20. [만료 스케줄러 — ShedLock](#20-만료-스케줄러--shedlock)
+20. [만료 스케줄러: ShedLock](#20-만료-스케줄러-shedlock)
 
 ### Part 5. 테스트와 검증
 21. [테스트 전략과 Testcontainers](#21-테스트-전략과-testcontainers)
-22. [동시성 테스트 — 왜 1명만 성공하는가](#22-동시성-테스트--왜-1명만-성공하는가)
+22. [동시성 테스트: 왜 1명만 성공하는가](#22-동시성-테스트-왜-1명만-성공하는가)
 
 ### Part 6. Spring Boot 심화
 23. [Spring Boot 핵심 개념 정리](#23-spring-boot-핵심-개념-정리)
@@ -153,7 +153,7 @@ docker compose down -v      # 중지 + 데이터 삭제
 
 ### Kafka KRaft 모드란?
 기존 Kafka는 Zookeeper가 필수였지만, KRaft 모드에서는 Kafka 자체가 컨트롤러 역할을 수행합니다.
-`KAFKA_PROCESS_ROLES: broker,controller` — 하나의 노드가 브로커와 컨트롤러를 겸합니다.
+`KAFKA_PROCESS_ROLES: broker,controller`: 하나의 노드가 브로커와 컨트롤러를 겸합니다.
 
 ### Healthcheck의 의미
 ```yaml
@@ -167,7 +167,7 @@ healthcheck:
 
 ---
 
-## 4. 패키지 구조 — 왜 이렇게 나눴는가
+## 4. 패키지 구조: 왜 이렇게 나눴는가
 
 ```
 src/main/java/com/concert/booking/
@@ -269,7 +269,7 @@ public ConcertResponse getConcert() { return ConcertResponse.from(concert); }
 
 ### 테이블별 핵심 포인트
 
-#### seats — version 컬럼의 의미
+#### seats: version 컬럼의 의미
 ```sql
 status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'  -- 상태 머신의 시작점
 version BIGINT NOT NULL DEFAULT 0                 -- 낙관적 락용 버전 관리
@@ -279,13 +279,13 @@ version BIGINT NOT NULL DEFAULT 0                 -- 낙관적 락용 버전 관
 나중에 커밋하는 쪽은 "내가 읽었을 때의 version과 다르다!"고 감지하여 실패합니다.
 이것이 **낙관적 락**의 원리입니다. (14장에서 자세히 설명)
 
-#### reservations — UUID를 별도로 쓰는 이유
+#### reservations: UUID를 별도로 쓰는 이유
 ```sql
 reservation_key UUID NOT NULL UNIQUE  -- 외부 노출용 식별자
 ```
 auto_increment PK는 `1, 2, 3`으로 추측 가능. `/api/reservations/3`이면 다른 사람이 `/api/reservations/2`를 시도할 수 있음. UUID는 추측 불가능합니다.
 
-#### reservation_seats — 중간 테이블이 필요한 이유
+#### reservation_seats: 중간 테이블이 필요한 이유
 1건의 예매에 최대 4석까지 선택 가능 → 예매:좌석 = **N:M 관계** → 중간 테이블 필수
 
 ### 인덱스 설계
@@ -309,12 +309,12 @@ CREATE INDEX idx_reservations_status_expires ON reservations(status, expires_at)
 
 ---
 
-## 6. 도메인 엔티티 — Rich Domain Model
+## 6. 도메인 엔티티: Rich Domain Model
 
 ### Anemic vs Rich Domain Model
 
 ```java
-// ❌ Anemic Domain Model — Entity는 데이터만, 로직은 Service에
+// ❌ Anemic Domain Model: Entity는 데이터만, 로직은 Service에
 public class Seat {
     private SeatStatus status;
     public void setStatus(SeatStatus status) { this.status = status; }
@@ -322,7 +322,7 @@ public class Seat {
 // Service: seat.setStatus(SeatStatus.RESERVED);
 // → AVAILABLE에서 바로 RESERVED? HELD를 건너뛰었는데 아무도 막지 못함!
 
-// ✅ Rich Domain Model (이 프로젝트) — Entity가 스스로 상태를 관리
+// ✅ Rich Domain Model (이 프로젝트): Entity가 스스로 상태를 관리
 public class Seat {
     private SeatStatus status;
     public void hold() {
@@ -353,7 +353,7 @@ public class SomeEntity {
 }
 ```
 
-### `@Version` — 낙관적 락의 핵심
+### `@Version`: 낙관적 락의 핵심
 
 ```java
 @Version
@@ -417,11 +417,11 @@ HELD 단계가 있으면:
 
 ---
 
-## 8. JWT 인증 — 요청이 처리되기까지
+## 8. JWT 인증: 요청이 처리되기까지
 
 ### JWT란?
 
-**JSON Web Token** — 서버가 클라이언트에게 발급하는 "디지털 신분증"입니다.
+**JSON Web Token**: 서버가 클라이언트에게 발급하는 "디지털 신분증"입니다.
 
 **비유**: 놀이공원 입장 팔찌
 - 입장 시 한 번 확인하고 팔찌를 채워줌 (로그인 시 JWT 발급)
@@ -449,7 +449,7 @@ HELD 단계가 있으면:
 
 ---
 
-## 9. 예매 흐름 — 핵심 비즈니스 로직
+## 9. 예매 흐름: 핵심 비즈니스 로직
 
 > 파일: `service/reservation/PessimisticLockReservationService.java`
 
@@ -458,7 +458,7 @@ public ReservationResponse reserve(Long userId, ReservationRequest request, Stri
     // ① Idempotency-Key claim/replay 확인
     // ② 신규 요청이면 queueToken 검증
     // ③ 좌석 예매 트랜잭션 실행
-    // ④ 좌석 ID 정렬 (데드락 방지) — [5, 3] → [3, 5]
+    // ④ 좌석 ID 정렬 (데드락 방지): [5, 3] → [3, 5]
     // ⑤ All-or-Nothing 검증 + 좌석 HOLD
     // ⑥ 예매 생성 후 idempotency claim 완료 처리
     // ⑦ commit 이후 queueToken 소비
@@ -487,10 +487,10 @@ public ReservationResponse reserve(Long userId, ReservationRequest request, Stri
 @Transactional
 public PaymentResponse pay(Long userId, PaymentRequest request, String idempotencyKey) {
     // ① reservation row 잠금
-    // ② 본인 확인 — 다른 사람의 예매 결제 불가
+    // ② 본인 확인: 다른 사람의 예매 결제 불가
     // ③ 같은 Idempotency-Key면 기존 PaymentResponse 반환
     // ④ 다른 key로 이미 결제된 예매면 409
-    // ⑤ 결제 생성 (mock PG — 즉시 COMPLETED)
+    // ⑤ 결제 생성 (mock PG: 즉시 COMPLETED)
     // ⑥ 예매 확정: PENDING → CONFIRMED
     // ⑦ 좌석 확정: HELD → RESERVED
 }
@@ -663,7 +663,7 @@ T2: UPDATE ... WHERE version=0 → 0 rows! → OptimisticLockException ❌
     → 재조회: status='HELD' → AVAILABLE 아님 → 최종 실패!
 ```
 
-### Spring Retry — 자동 재시도 메커니즘
+### Spring Retry: 자동 재시도 메커니즘
 
 #### 설정
 ```java
@@ -730,7 +730,7 @@ seatRepository.findAllByIdInAndAvailable(...)            // 일반 SELECT
 
 ---
 
-## 15. 비관적 락 vs 낙관적 락 — 완전 비교
+## 15. 비관적 락 vs 낙관적 락: 완전 비교
 
 | | 비관적 락 | 낙관적 락 |
 |---|---|---|
@@ -746,12 +746,12 @@ seatRepository.findAllByIdInAndAvailable(...)            // 일반 SELECT
 
 ```
 충돌이 많은 경우 (인기 좌석):
-  비관적 락 ✅ — 어차피 충돌하니 미리 잠궈서 확실하게
-  낙관적 락 ❌ — 대부분 실패 + 재시도 = 오히려 비효율
+  비관적 락 ✅: 어차피 충돌하니 미리 잠궈서 확실하게
+  낙관적 락 ❌: 대부분 실패 + 재시도 = 오히려 비효율
 
 충돌이 적은 경우 (일반 게시글 수정):
-  비관적 락 ❌ — 불필요한 락으로 성능만 저하
-  낙관적 락 ✅ — 대부분 성공, 가끔 재시도
+  비관적 락 ❌: 불필요한 락으로 성능만 저하
+  낙관적 락 ✅: 대부분 성공, 가끔 재시도
 ```
 
 ### 10명 동시 요청 시 실행 흐름 비교
@@ -891,7 +891,7 @@ public void reserve() {
 }
 ```
 
-### MultiLock — 다좌석 원자적 잠금
+### MultiLock: 다좌석 원자적 잠금
 
 ```java
 // 좌석 ID 정렬 → 데드락 방지
@@ -920,7 +920,7 @@ multiLock.tryLock(3, 5, TimeUnit.SECONDS);
 
 ---
 
-## 18. 대기열 시스템 — Redis Sorted Set + SSE
+## 18. 대기열 시스템: Redis Sorted Set + SSE
 
 > 파일: `service/queue/QueueService.java`, `controller/QueueController.java`
 
@@ -961,7 +961,7 @@ multiLock.tryLock(3, 5, TimeUnit.SECONDS);
   예매 성공 → 토큰 소멸 (1회용)
 ```
 
-### Redis Sorted Set — 왜 이 자료구조?
+### Redis Sorted Set: 왜 이 자료구조?
 
 ```
 ZADD queue:schedule:1 1707123456.789 "user:42"
@@ -982,7 +982,7 @@ ZADD queue:schedule:1 1707123457.456 "user:7"
 
 **NX 옵션**: 이미 존재하는 멤버면 추가하지 않음 → 중복 진입 방지
 
-### SSE (Server-Sent Events) — 실시간 순번 알림
+### SSE (Server-Sent Events): 실시간 순번 알림
 
 ```java
 @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -1017,7 +1017,7 @@ public SseEmitter streamPosition(@RequestParam Long scheduleId) {
 
 대기열 순번은 서버에서 클라이언트로만 전송하면 되므로 SSE가 최적.
 
-### QueueTokenGuard — 예매 API 보호
+### QueueTokenGuard: 예매 API 보호
 
 ```java
 // QueueTokenGuard.java
@@ -1070,14 +1070,14 @@ reservation.cancelled  ← 취소/만료 시 발행
   reason: "USER_CANCELLED" 또는 "EXPIRED"
 ```
 
-### Producer — Outbox 저장
+### Producer: Outbox 저장
 
 ```java
-// PaymentService.java — 결제 완료 시
+// PaymentService.java: 결제 완료 시
 reservation.confirm();
 outboxEventService.saveReservationConfirmed(reservation);
 
-// ReservationExpirationScheduler.java — 만료 시
+// ReservationExpirationScheduler.java: 만료 시
 reservation.expire(now);
 outboxEventService.saveReservationExpired(reservation);
 ```
@@ -1086,7 +1086,7 @@ outboxEventService.saveReservationExpired(reservation);
 발행 성공 시 `PUBLISHED`, 실패 시 `FAILED + retryCount + lastError`를 기록한다.
 이 방식은 DB commit 이후 Kafka publish 실패로 이벤트가 사라지는 구간을 줄이는 at-least-once 구조다.
 
-### Consumer — 좌석 반환
+### Consumer: 좌석 반환
 
 ```java
 // SeatReleaseConsumer.java
@@ -1097,7 +1097,7 @@ public void handleCancelledReservation(ReservationCancelledEvent event, Acknowle
     // 3. HELD 좌석만 AVAILABLE로 반환
     // 4. 실제 반환 수만큼 schedule.availableSeats / Redis stock 증가
     // 5. Redis 좌석 홀드 삭제: DEL hold:seat:{seatId} (없어도 성공)
-    // 6. ack.acknowledge() — manual commit
+    // 6. ack.acknowledge(): manual commit
 }
 ```
 
@@ -1128,7 +1128,7 @@ if (rs.getSeat().getStatus() == SeatStatus.HELD) {
 
 ---
 
-## 20. 만료 스케줄러 — ShedLock
+## 20. 만료 스케줄러: ShedLock
 
 > 파일: `service/reservation/ReservationExpirationScheduler.java`, `config/SchedulerConfig.java`
 
@@ -1161,7 +1161,7 @@ if (rs.getSeat().getStatus() == SeatStatus.HELD) {
     Redis 재고 복원
 ```
 
-### ShedLock — 무엇을 보완하나?
+### ShedLock: 무엇을 보완하나?
 
 ```
 서버 2대 운영:
@@ -1285,7 +1285,7 @@ TestContainers가 PostgreSQL, Redis, Kafka를 실제로 구동하므로 auto-con
 
 ---
 
-## 22. 동시성 테스트 — 왜 1명만 성공하는가
+## 22. 동시성 테스트: 왜 1명만 성공하는가
 
 > 파일: `src/test/java/com/concert/booking/integration/ConcurrencyIntegrationTest.java`
 > 파일: `src/test/java/com/concert/booking/integration/OptimisticLockConcurrencyTest.java`
@@ -1320,16 +1320,16 @@ assertThat(failCount.get()).isEqualTo(9);
 ### 차이점: 서비스 주입 방식
 
 ```java
-// 비관적 락 테스트 — @Primary가 자동 주입
+// 비관적 락 테스트: @Primary가 자동 주입
 @Autowired
 private ReservationService reservationService;
 
-// 낙관적 락 테스트 — @Qualifier로 명시
+// 낙관적 락 테스트: @Qualifier로 명시
 @Autowired
 @Qualifier("optimisticLockReservationService")
 private ReservationService reservationService;
 
-// 분산 락 테스트 — @Qualifier로 명시
+// 분산 락 테스트: @Qualifier로 명시
 @Autowired
 @Qualifier("distributedLockReservationService")
 private ReservationService reservationService;
@@ -1337,21 +1337,21 @@ private ReservationService reservationService;
 
 ### 핵심 동시성 도구 설명
 
-#### ExecutorService — 스레드 풀
+#### ExecutorService: 스레드 풀
 ```java
 ExecutorService executor = Executors.newFixedThreadPool(10);
 // 10개 스레드를 미리 만들어둔 "작업자 풀"
 // executor.submit(task): 작업을 풀에 제출하면 남는 스레드가 실행
 ```
 
-#### CountDownLatch — "모두 끝날 때까지 기다려"
+#### CountDownLatch: "모두 끝날 때까지 기다려"
 ```java
 CountDownLatch latch = new CountDownLatch(10);  // 카운트: 10
 latch.countDown();  // 각 스레드 끝에서: 카운트 -1
 latch.await();      // 메인 스레드: 카운트가 0이 될 때까지 대기
 ```
 
-#### AtomicInteger — 스레드 안전한 카운터
+#### AtomicInteger: 스레드 안전한 카운터
 ```java
 AtomicInteger count = new AtomicInteger(0);
 count.incrementAndGet();  // CAS 연산으로 원자적 증가
@@ -1391,7 +1391,7 @@ public class PaymentService {
 }
 ```
 
-### Java Record — DTO에 최적
+### Java Record: DTO에 최적
 
 ```java
 public record LoginRequest(@NotBlank String email, @NotBlank String password) { }

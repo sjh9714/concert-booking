@@ -5,7 +5,7 @@
  * 화면 낭독기가 읽어야 하고, 어느 배율에서도 선명해야 하고, 공연이 늘어도
  * 사진만 있으면 되기 때문이다 (`scripts/fetch-posters.mjs`).
  *
- * 비율은 3:4다 — NOL 티켓 0.753, 예스24 0.71을 실측해 정했다(`DESIGN.md`).
+ * 비율은 3:4다. NOL 티켓 0.753, 예스24 0.71을 실측해 정했다(`DESIGN.md`).
  */
 import { POSTER_SLUGS } from "../lib/artwork";
 
@@ -48,7 +48,7 @@ export function Poster({ title, artist, width = 240, eager = false }: PosterProp
 
       {/*
        * 포스터 그림에 박힌 글씨와 같은 역할이라 낭독하지 않는다. 공연명은 언제나
-       * 바로 옆에 진짜 활자로 있다 — 목록은 카드 제목, 상세는 h1. 여기까지 읽으면
+       * 바로 옆에 진짜 활자로 있다. 목록은 카드 제목, 상세는 h1. 여기까지 읽으면
        * 같은 이름을 두 번 듣는다. 굽지 않고 활자로 얹는 이유는 선명함과 유지보수다.
        */}
       <div className="poster-type" aria-hidden="true">

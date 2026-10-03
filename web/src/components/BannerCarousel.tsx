@@ -5,7 +5,7 @@
  * 무한 루프 · 썸네일 52×52 정사각(간격 8 · 모서리 6)이 슬라이드마다 하나.
  *
  * <b>그쪽에 없는 것을 여기 더한다.</b> NOL 캐러셀에는 정지 버튼이 없고 썸네일이
- * {@code <div>}라 키보드로 닿지 않는다 — WCAG 2.2.2(Pause, Stop, Hide)와 4.1.2 위반이다.
+ * {@code <div>}라 키보드로 닿지 않는다. WCAG 2.2.2(Pause, Stop, Hide)와 4.1.2 위반이다.
  * 실측을 기준으로 삼되 고장난 부분까지 따라가지는 않는다.
  *
  * 라이브러리를 넣지 않는다. 무한 루프는 앞뒤에 복제 한 장씩을 두고, 끝에 닿으면
@@ -22,7 +22,7 @@ import type { Concert } from "../lib/contracts";
 const SLIDE_MS = 300;
 /**
  * NOL은 2500ms지만 그쪽은 슬라이드가 17장이고 우린 6장이다.
- * 5초면 한 바퀴 30초 — 읽고 판단할 시간이 있다. 자동으로 움직이는 것은 느릴수록 덜 적대적이다.
+ * 5초면 한 바퀴 30초: 읽고 판단할 시간이 있다. 자동으로 움직이는 것은 느릴수록 덜 적대적이다.
  */
 const AUTOPLAY_MS = 5000;
 
@@ -60,7 +60,7 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
    * 멈추는 경우는 셋이다: 정지 버튼, 키보드 포커스가 안에 들어옴, 탭이 배경으로 감.
    *
    * **마우스를 올렸다고 멈추지 않는다.** 배너가 full-bleed로 화면 위쪽을 통째로 덮어서
-   * 포인터가 그냥 거기 놓여 있는 일이 잦다 — 그때마다 멈추면 "가끔 안 넘어간다"로 느껴진다.
+   * 포인터가 그냥 거기 놓여 있는 일이 잦다. 그때마다 멈추면 "가끔 안 넘어간다"로 느껴진다.
    * 실제로 그렇게 보고를 받았고, 재 보니 원인이 호버였다. 멈추고 싶은 사람을 위해서는
    * 눈에 보이는 정지 버튼이 있다(NOL에는 그것이 없다).
    *
@@ -69,7 +69,7 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
    * `:focus-visible`로 둘을 가른다.
    *
    * 배경 탭을 멈추는 것이 특히 중요하다. 배경에서는 CSS 전환이 아예 돌지 않는데
-   * setInterval은 계속 뛴다 — 실제로 탭을 두고 다른 일을 하다 돌아왔더니
+   * setInterval은 계속 뛴다. 실제로 탭을 두고 다른 일을 하다 돌아왔더니
    * 인덱스가 14까지 가서 배너가 화면 밖으로 나가 있었다.
    */
   const paused = stopped || keyboardFocus || hidden;
@@ -109,7 +109,7 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
   }, [index, total, animate, reduced]);
 
   /*
-   * 제자리로 돌려놓은 다음 프레임에 전환을 되살린다 —
+   * 제자리로 돌려놓은 다음 프레임에 전환을 되살린다.
    * 같은 프레임에 되살리면 그 점프가 애니메이션으로 보인다.
    */
   useEffect(() => {
@@ -149,7 +149,7 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
           const visible = slot === index;
           const dates = concert.nextScheduleDate
             ? concert.lastScheduleDate && concert.lastScheduleDate !== concert.nextScheduleDate
-              ? `${concertDate(concert.nextScheduleDate)} – ${concertDate(concert.lastScheduleDate)}`
+              ? `${concertDate(concert.nextScheduleDate)} ~ ${concertDate(concert.lastScheduleDate)}`
               : concertDate(concert.nextScheduleDate)
             : "일정 준비 중";
 
@@ -222,7 +222,7 @@ export function BannerCarousel({ concerts }: { concerts: Concert[] }) {
           <ChevronLeft aria-hidden="true" size={20} />
         </button>
 
-        {/* 썸네일 52×52 — NOL 실측. 포스터를 정사각으로 잘라 쓴다 */}
+        {/* 썸네일 52×52: NOL 실측. 포스터를 정사각으로 잘라 쓴다 */}
         <ul className="banner-thumbs">
           {concerts.map((concert, slide) => {
             const slug = POSTER_SLUGS[concert.title];

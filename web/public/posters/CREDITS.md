@@ -8,7 +8,7 @@ Pexels 라이선스는 상업적 사용과 수정을 허용하며 출처 표기�
 
 | 공연 | 장면 | 원본 |
 | --- | --- | --- |
-| NOCTURNE — SEOUL | 푸른 조명이 부챗살처럼 퍼지는 야간 공연장 | [Pexels #2263435](https://www.pexels.com/photo/2263435/) |
+| NOCTURNE: SEOUL | 푸른 조명이 부챗살처럼 퍼지는 야간 공연장 | [Pexels #2263435](https://www.pexels.com/photo/2263435/) |
 | ORBITAL WEEKEND | 헤드폰을 쓰고 장비를 다루는 디제이 | [Pexels #15235342](https://www.pexels.com/photo/15235342/) |
 | 종이비행기 | 무대에서 노래하는 사람과 그 앞의 관객 | [Pexels #878998](https://www.pexels.com/photo/878998/) |
 | LOW TIDE | 어두운 무대 위로 떨어지는 조명과 연주자들 | [Pexels #15583331](https://www.pexels.com/photo/15583331/) |
@@ -23,5 +23,5 @@ Pexels 라이선스는 상업적 사용과 수정을 허용하며 출처 표기�
 
 ## 생성
 
-`node scripts/fetch-posters.mjs` — 3:4로 잘라 240/480/720 폭의 AVIF·WebP로 저장합니다.
+`node scripts/fetch-posters.mjs`: 3:4로 잘라 240/480/720 폭의 AVIF·WebP로 저장합니다.
 비율 3:4는 NOL 티켓(0.753)과 예스24(0.71)를 실측해 정한 값입니다(`web/DESIGN.md`).

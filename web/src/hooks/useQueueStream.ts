@@ -7,12 +7,12 @@ import { queuePositionSchema, type QueuePosition } from "../lib/contracts";
  * 대기열 순번을 받는다. SSE로 듣고, 안 되면 폴링으로 내려앉는다.
  *
  * 페이지 안에 있던 로직을 훅으로 뽑았다. 페이지에 있을 때는 브라우저를 띄워야만 확인할 수
- * 있었다 — "세 번 실패하면 폴링으로 바뀐다"를 검증하려면 실제 서버를 죽여야 했다.
+ * 있었다. "세 번 실패하면 폴링으로 바뀐다"를 검증하려면 실제 서버를 죽여야 했다.
  * 훅이 되면 그걸 단위 테스트로 고정할 수 있다.
  *
  * 재연결 예산이 있는 이유: `fetchEventSource`는 그냥 두면 무한히 다시 붙는다.
  * 서버가 정말 죽었을 때 화면이 영원히 "연결 중"으로 남으므로, 세 번까지만 시도하고
- * 폴링으로 바꾼다 — 느려도 순번은 보이는 쪽이 낫다.
+ * 폴링으로 바꾼다. 느려도 순번은 보이는 쪽이 낫다.
  */
 
 export const MAX_SSE_RECONNECTS = 3;
@@ -55,7 +55,7 @@ export function waitForReconnect(delayMs: number, signal: AbortSignal): Promise<
  * @param seed 대기열 진입·재진입 응답. 이게 바뀌면 스트림이 들고 있던 값을 버린다.
  *
  * 처음엔 페이지가 `stream.position ?? entered`로 골랐는데, 그러면 폴링이 이미 값을 채운 뒤에는
- * 재진입 응답이 무시된다 — 다시 참여했는데 화면이 계속 "참여하지 않았습니다"로 남았다.
+ * 재진입 응답이 무시된다. 다시 참여했는데 화면이 계속 "참여하지 않았습니다"로 남았다.
  * e2e가 잡았다. 진입 응답은 그 시점의 진실이므로 스트림이 그걸 받아들여야 한다.
  */
 export function useQueueStream(

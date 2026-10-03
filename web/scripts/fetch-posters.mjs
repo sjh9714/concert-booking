@@ -8,7 +8,7 @@
  * **사진은 생성하지 않는다.** 여섯 장 모두 Pexels에서 받은 실제 촬영 사진이고,
  * 각각 그 공연의 성격에 맞는 장면이다. 출처는 `public/posters/CREDITS.md`에 남긴다.
  *
- * **제목과 아티스트는 이미지에 굽지 않는다.** 사진 위에 HTML 활자로 얹는다 —
+ * **제목과 아티스트는 이미지에 굽지 않는다.** 사진 위에 HTML 활자로 얹는다.
  * 그래야 화면 낭독기가 읽고, 어느 배율에서도 선명하고, 공연이 늘어도 사진만 있으면 된다.
  *
  * 사용법: node scripts/fetch-posters.mjs [--force]
@@ -21,14 +21,14 @@ import sharp from "sharp";
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public/posters");
 /** 카드 240px · 상세 480px · 2배 화면 720px */
 const WIDTHS = [240, 480, 720];
-/** 3:4 — NOL 티켓 실측 0.753, 예스24 0.71 */
+/** 3:4: NOL 티켓 실측 0.753, 예스24 0.71 */
 const RATIO = 4 / 3;
 
 /** `slug`는 DataInitializer의 공연 제목과 짝이 맞아야 한다 */
 const POSTERS = [
   {
     slug: "nocturne-seoul",
-    concert: "NOCTURNE — SEOUL",
+    concert: "NOCTURNE: SEOUL",
     id: "2263435",
     desc: "푸른 조명이 부챗살처럼 퍼지는 야간 공연장",
   },
@@ -94,7 +94,7 @@ for (const poster of POSTERS) {
   console.log(`${(input.length / 1024).toFixed(0)}KB`);
 
   for (const w of WIDTHS) {
-    // `position: "attention"` — 사람이나 무대가 아니라 여백이 잘리게 한다.
+    // `position: "attention"`: 사람이나 무대가 아니라 여백이 잘리게 한다.
     // 3:4로 세게 자르므로 어디를 남기는지가 결과를 가른다.
     const base = sharp(input).resize(w, Math.round(w * RATIO), {
       fit: "cover",
@@ -135,7 +135,7 @@ await writeFile(
     "",
     "## 생성",
     "",
-    "`node scripts/fetch-posters.mjs` — 3:4로 잘라 240/480/720 폭의 AVIF·WebP로 저장합니다.",
+    "`node scripts/fetch-posters.mjs`: 3:4로 잘라 240/480/720 폭의 AVIF·WebP로 저장합니다.",
     "비율 3:4는 NOL 티켓(0.753)과 예스24(0.71)를 실측해 정한 값입니다(`web/DESIGN.md`).",
     "",
   ].join("\n"),

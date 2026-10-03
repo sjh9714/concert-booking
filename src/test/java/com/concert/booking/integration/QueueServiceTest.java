@@ -72,7 +72,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("중복 진입 방지 — 같은 userId로 2번 enter → 순위 동일")
+    @DisplayName("중복 진입 방지: 같은 userId로 2번 enter → 순위 동일")
     void duplicate_entry_prevention() {
         Long userId = 1L;
 
@@ -186,7 +186,7 @@ class QueueServiceTest {
     }
 
     @Test
-    @DisplayName("토큰 1회 사용 — consumeToken 후 validateToken → false")
+    @DisplayName("토큰 1회 사용: consumeToken 후 validateToken → false")
     void token_single_use() {
         Long userId = 1L;
 

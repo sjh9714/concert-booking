@@ -50,7 +50,7 @@ export function AuthPage({ mode }: { mode: "login" | "signup" }) {
   return (
     <main id="main-content" className="auth-layout">
       {/*
-       * 장식 면이라 낭독하지 않는다 — 로그인 화면의 내용은 오른쪽 양식이다.
+       * 장식 면이라 낭독하지 않는다. 로그인 화면의 내용은 오른쪽 양식이다.
        * 전에는 여기에 형광 "01"이 320px로 서 있었다. 예매 서비스의 로그인 화면에
        * 거대한 번호가 있을 이유가 없어, 이 서비스가 지키는 것 세 가지로 바꿨다.
        */}

@@ -1,9 +1,9 @@
 {
-  "capturedAt": "2026-10-02",
+  "capturedAt": "2026-10-03",
   "conditions": "실제 로컬 compose.service.yml. 좌석 선점·테스트 결제 후 확인 화면.",
   "sha256": {
-    "screens/demo-desktop.png": "8adf345ce2ba55e49e85f9dd9b525e8991fca5511c5415ce235ad0b9aaaf7c74",
-    "screens/demo-mobile.png": "747583f1074e3fef794d9c6aed039c8bfc6818c3acd11e8b1fc98ff3d31e36de",
+    "screens/demo-desktop.png": "4f4177662ffa29549d489aea52b8d2137cb0c621caae645bce407dd8ca5183b5",
+    "screens/demo-mobile.png": "075c1e80e8390cf38234babcd8dbf062544257f6fbc192c0c00116a5b2738541",
     "architecture/request-flow.svg": "2486c6f37bc1681881924e6d9316b4b8b547c5d3b48e8ef27e71ca257ae0473e"
   }
 }

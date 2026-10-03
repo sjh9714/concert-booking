@@ -36,7 +36,7 @@ export function CatalogPage() {
     <main id="main-content">
       {/*
        * 표어를 두지 않는다. 실측한 두 서비스 모두 목록 위에 홍보 문구가 없고
-       * 바로 공연부터 나온다 — 예매하러 온 사람에게 첫 화면은 공연이다.
+       * 바로 공연부터 나온다. 예매하러 온 사람에게 첫 화면은 공연이다.
        * 서비스가 무엇을 보장하는지는 머리글의 '예매가 안전한 이유'가 말한다.
        *
        * 대신 맨 위는 배너 캐러셀이다. NOL 티켓도 그렇고, 그림이 첫 화면을 이끈다.
@@ -57,7 +57,7 @@ export function CatalogPage() {
              * 예매 목록에서 사람이 고르려면 언제 하는지와 자리가 남았는지를 알아야 한다.
              * 전에는 제목·장소·아티스트만 있어서 목록만 보고는 아무것도 고를 수 없었다.
              *
-             * 남은 비율로 상태를 말한다 — 숫자만 적으면 436 중 40이 많은지 적은지 모른다.
+             * 남은 비율로 상태를 말한다. 숫자만 적으면 436 중 40이 많은지 적은지 모른다.
              */
             const ratio = concert.totalSeats > 0 ? concert.availableSeats / concert.totalSeats : 0;
             const status =
@@ -68,7 +68,7 @@ export function CatalogPage() {
                   : { label: "예매중", tone: "open" };
             const dates = concert.nextScheduleDate
               ? concert.lastScheduleDate && concert.lastScheduleDate !== concert.nextScheduleDate
-                ? `${concertDate(concert.nextScheduleDate)} – ${concertDate(concert.lastScheduleDate)}`
+                ? `${concertDate(concert.nextScheduleDate)} ~ ${concertDate(concert.lastScheduleDate)}`
                 : concertDate(concert.nextScheduleDate)
               : "일정 준비 중";
 

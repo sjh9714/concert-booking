@@ -24,7 +24,7 @@
   --line: #d8d5cf;
 
   /* 액센트는 하나뿐이다. "지금 눌러야 할 것" 한 곳에만.
-     검정 위에서만 쓴다 — 흰 배경 위에서는 대비가 1.7:1이라 글자가 안 읽힌다. */
+     검정 위에서만 쓴다. 흰 배경 위에서는 대비가 1.7:1이라 글자가 안 읽힌다. */
   --volt: #d8ff2e;
 
   --sold: #b8b4ac;
@@ -35,7 +35,7 @@
 
   /*
    * 활자 크기. 실측한 두 서비스 모두 가장 큰 글자가 28px이었다.
-   * 우리는 96px이었다 — 그 한 가지가 "예매 서비스"와 "포트폴리오"를 갈랐다.
+   * 우리는 96px이었다. 그 한 가지가 "예매 서비스"와 "포트폴리오"를 갈랐다.
    *
    * 화면에서 clamp()를 새로 쓰지 않는다. 여기 없는 크기가 필요하면
    * 그건 대개 크기가 아니라 배치 문제다.
@@ -49,19 +49,19 @@
   --fs-badge: 11px;
 
   /*
-   * 사람이 응시하는 숫자 — 대기 순번과 남은 시간.
+   * 사람이 응시하는 숫자: 대기 순번과 남은 시간.
    * 이건 제목이 아니라 계기판이라 28px 규칙을 따르지 않는다. 전에는 384px이었다.
    */
   --fs-focus: clamp(56px, 11vw, 72px);
 
-  /* NOL 실측: 8px 73회 · 6px 65회. 우리는 0이었다 — 각진 면이 거래 화면을 딱딱하게 만들었다 */
+  /* NOL 실측: 8px 73회 · 6px 65회. 우리는 0이었다. 각진 면이 거래 화면을 딱딱하게 만들었다 */
   --radius: 8px;
   --radius-sm: 6px;
 
   /*
    * 본문 폭. 전에는 4vw 여백뿐이라 1440px 화면에서 본문이 1330px까지 늘어났다.
    * 좁은 화면에서는 4vw가 이기고, 넓어지면 1200px에서 멈추고 가운데로 온다.
-   * 머리글·바닥글까지 같은 값을 쓴다 — 한 곳만 다르면 세로선이 어긋난다.
+   * 머리글·바닥글까지 같은 값을 쓴다. 한 곳만 다르면 세로선이 어긋난다.
    */
   --gutter: max(4vw, calc((100% - 1200px) / 2));
 }
@@ -190,7 +190,7 @@ button:disabled { cursor: not-allowed; }
    NOL 실측(2026-08-07): 1425×463(3.08:1) · 전환 300ms · 자동 2500ms ·
    썸네일 52×52 정사각(간격 8 · 모서리 6) · 스트립은 본문 폭에 맞춰 배너 위에 겹침.
 
-   그쪽에 없는 정지 버튼과 키보드로 닿는 썸네일을 여기서 더한다 —
+   그쪽에 없는 정지 버튼과 키보드로 닿는 썸네일을 여기서 더한다.
    자동으로 움직이는 것에는 멈출 방법이 있어야 한다(WCAG 2.2.2). */
 .banner {
   position: relative;
@@ -204,7 +204,7 @@ button:disabled { cursor: not-allowed; }
   padding: 0;
   list-style: none;
   display: flex;
-  /* 지속 시간은 컴포넌트가 정한다 — 감소 모션이면 0ms */
+  /* 지속 시간은 컴포넌트가 정한다. 감소 모션이면 0ms */
   transition-property: transform;
   transition-timing-function: var(--ease);
 }
@@ -212,7 +212,7 @@ button:disabled { cursor: not-allowed; }
 .banner-slide {
   position: relative;
   flex: 0 0 100%;
-  /* 3:1 — NOL 3.08:1 */
+  /* 3:1: NOL 3.08:1 */
   aspect-ratio: 3 / 1;
   display: grid;
 }
@@ -234,7 +234,7 @@ button:disabled { cursor: not-allowed; }
  * 상자(가로 12~30% · 세로 29~44%)의 **최악 픽셀** 대비를 재서 정했다.
  *
  * 평균 휘도로는 전부 통과했지만(흰 글자 5.7~16.8:1) 그건 틀린 잣대였다.
- * 최악 픽셀로 보면 막이 없을 때 `밤의 라디오`가 1.3:1, `CROSSFADE 2026`이 1.0:1이다 —
+ * 최악 픽셀로 보면 막이 없을 때 `밤의 라디오`가 1.3:1, `CROSSFADE 2026`이 1.0:1이다.
  * 달과 해가 정확히 글자 뒤에 있다. .72에서 가장 나쁜 값이 4.8:1이라 여유를 두고 .78로 잡았다.
  */
 .banner-scrim { grid-area: 1 / 1; }
@@ -270,7 +270,7 @@ button:disabled { cursor: not-allowed; }
 .banner-copy .eyebrow { margin: 0; }
 
 /* 밝은 그림 위에서는 검정 채움 버튼이 그대로 보인다.
-   어두운 그림 위에서는 사라지므로 액센트로 뒤집는다 — 대기실과 같은 규칙이다. */
+   어두운 그림 위에서는 사라지므로 액센트로 뒤집는다. 대기실과 같은 규칙이다. */
 .tone-dark .banner-copy .primary-button { background: var(--volt); box-shadow: none; color: var(--ink); }
 .tone-dark .banner-copy .primary-button:hover { background: #e6ff5c; }
 .tone-dark :focus-visible { outline-color: var(--volt); }
@@ -337,7 +337,7 @@ button:disabled { cursor: not-allowed; }
 
 /*
  * 지금 보는 칸의 테두리는 **안쪽으로** 그린다.
- * 바깥 그림자로 그렸더니 위아래와 좌우가 잘렸다 — 스트립이 `overflow-x: auto`라
+ * 바깥 그림자로 그렸더니 위아래와 좌우가 잘렸다. 스트립이 `overflow-x: auto`라
  * 세로도 함께 잘리고(한 축이 visible이 아니면 다른 축도 auto가 된다),
  * 가로로 미는 통에 양 끝도 잘린다. 안쪽이면 잘릴 자리가 없다.
  */
@@ -384,7 +384,7 @@ button:disabled { cursor: not-allowed; }
   overflow: hidden;
 }
 
-/* 공연장은 검정이다. 실측한 두 서비스 모두 장소를 본문 색으로 뒀다 —
+/* 공연장은 검정이다. 실측한 두 서비스 모두 장소를 본문 색으로 뒀다.
    어디서 하는지는 고르는 데 필요한 정보지 부연이 아니다. */
 .concert-card-venue { margin: 0; font-size: var(--fs-body); color: var(--ink); }
 
@@ -431,7 +431,7 @@ button:disabled { cursor: not-allowed; }
 .poster-480 .poster-title { font-size: var(--fs-sub); }
 
 /* ── 상태 배지 ────────────────────────────────────────────
-   색만으로 말하지 않는다 — 글자가 상태를 그대로 적는다. */
+   색만으로 말하지 않는다. 글자가 상태를 그대로 적는다. */
 .badge {
   padding: 3px 7px;
   border-radius: var(--radius-sm);
@@ -460,7 +460,7 @@ button:disabled { cursor: not-allowed; }
 
 .error-state h1, .not-found h1 { max-width: 800px; margin: 0 0 24px; font-size: var(--fs-page); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; }
 
-/* 알약형 · 12px/700/자간 0.08em — DICE 실측을 따랐다.
+/* 알약형 · 12px/700/자간 0.08em: DICE 실측을 따랐다.
    이름은 그대로 두고 정의만 바꿨다. 21곳의 호출부를 건드릴 이유가 없다. */
 .primary-button, .secondary-button {
   min-height: 48px;
@@ -497,7 +497,7 @@ button:disabled { cursor: not-allowed; }
  * 어두운 면 위에서는 뒤집는다.
  *
  * 검정 배경(대기실)에 검정 버튼을 두면 사라진다. 실제로 그렇게 만들어 놓고
- * 스크린샷에서 발견했다 — 액센트를 "검정 위에서만 쓴다"고 정해 두었는데,
+ * 스크린샷에서 발견했다. 액센트를 "검정 위에서만 쓴다"고 정해 두었는데,
  * 그 규칙이 버튼 자체가 검정일 때는 성립하지 않는다.
  */
 .queue-page .primary-button,
@@ -559,7 +559,7 @@ button:disabled { cursor: not-allowed; }
 
 .back-link { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
 
-/* 포스터 왼쪽 · 정보 오른쪽 — 실측한 두 서비스의 공통 구조 */
+/* 포스터 왼쪽 · 정보 오른쪽: 실측한 두 서비스의 공통 구조 */
 .concert-hero { padding: 28px 0 36px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 36px; align-items: start; border-bottom: 1px solid var(--line); }
 
 .concert-hero h1 { max-width: 720px; margin: 4px 0 20px; font-size: var(--fs-page); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; }
@@ -662,15 +662,15 @@ button:disabled { cursor: not-allowed; }
 
 .row-label { color: var(--muted); font-size: .68rem; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* 줄바꿈하지 않는다. 한 열은 한 줄이어야 좌석표로 읽힌다 —
+/* 줄바꿈하지 않는다. 한 열은 한 줄이어야 좌석표로 읽힌다.
    전에는 44px 좌석에 8px 간격이라 20석 열이 넘쳐 두 줄로 접혔다. */
 .seat-buttons { display: flex; flex-wrap: nowrap; gap: 4px; justify-content: center; width: max-content; margin: 0 auto; }
 
-/* 좌석은 모서리를 둥글리지 않는다. 상태는 색만으로 말하지 않는다 —
+/* 좌석은 모서리를 둥글리지 않는다. 상태는 색만으로 말하지 않는다.
    선택함은 채움과 굵은 테두리를 함께 주고, 판매 완료는 취소선을 남긴다.
    aria-label에도 상태가 들어간다(SeatGrid.tsx). */
 .seat {
-  /* 28px — 20석 열이 한 줄에 들어가면서 목표 크기 24px은 넘는 크기 */
+  /* 28px: 20석 열이 한 줄에 들어가면서 목표 크기 24px은 넘는 크기 */
   width: 28px;
   min-width: 28px;
   height: 28px;
@@ -860,7 +860,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* ── 재작성 (DESIGN.md) ────────────────────────────────────
-   카드는 모서리를 둥글리지 않는다. 그림자도 없다 — 종이는 뜨지 않는다.
+   카드는 모서리를 둥글리지 않는다. 그림자도 없다. 종이는 뜨지 않는다.
    둥근 것은 알약 버튼과 상태 칩뿐이다.
 
    버튼 이름은 .primary-button / .secondary-button 하나뿐이다.

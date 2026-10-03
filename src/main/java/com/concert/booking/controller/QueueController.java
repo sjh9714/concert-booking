@@ -46,7 +46,7 @@ public class QueueController {
         this.queueTaskScheduler = queueTaskScheduler;
     }
 
-    // POST /api/queue/enter — 대기열 진입
+    // POST /api/queue/enter: 대기열 진입
     @PostMapping("/enter")
     public ResponseEntity<QueuePositionResponse> enter(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -55,7 +55,7 @@ public class QueueController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // GET /api/queue/position — 순위 조회
+    // GET /api/queue/position: 순위 조회
     @GetMapping("/position")
     public ResponseEntity<QueuePositionResponse> getPosition(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -64,7 +64,7 @@ public class QueueController {
         return ResponseEntity.ok(response);
     }
 
-    // GET /api/queue/events — SSE 실시간 순번 스트림
+    // GET /api/queue/events: SSE 실시간 순번 스트림
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamPosition(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -125,7 +125,7 @@ public class QueueController {
         return emitter;
     }
 
-    // GET /api/queue/token — 입장 토큰 발급
+    // GET /api/queue/token: 입장 토큰 발급
     @GetMapping("/token")
     public ResponseEntity<QueueTokenResponse> issueToken(
             @AuthenticationPrincipal CustomUserDetails userDetails,
