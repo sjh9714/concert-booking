@@ -76,7 +76,7 @@ export default function (data) {
             readSuccess.add(1);
         }
     } else {
-        // 예매 — 80% 확률로 인기 좌석 선택
+        // 예매: 80% 확률로 인기 좌석 선택
         let targetSeatId;
         if (Math.random() < 0.8 && data.hotSeats.length > 0) {
             targetSeatId = data.hotSeats[Math.floor(Math.random() * data.hotSeats.length)];

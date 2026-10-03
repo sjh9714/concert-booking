@@ -108,7 +108,7 @@ export function ReservationPage() {
       </header>
 
       <section className="reservation-detail" aria-labelledby="reservation-detail-title">
-        {/* 티켓은 포스터로 알아본다 — 목록과 같은 그림이 여기에도 있어야 이어진다 */}
+        {/* 티켓은 포스터로 알아본다. 목록과 같은 그림이 여기에도 있어야 이어진다 */}
         <div className="ticket-face">
           <div className="ticket-thumb">
             <Poster title={data.concertTitle ?? ""} />
@@ -138,7 +138,7 @@ export function ReservationPage() {
             <h2 id="payment-title">결제하고 좌석 확정</h2>
             {/*
              * 카드 정보를 받지 않는다는 것과 청구가 없다는 것은 남겨야 한다.
-             * 없애면 진짜 결제로 오인할 수 있다 — 이건 제품 설명이 아니라 고지다.
+             * 없애면 진짜 결제로 오인할 수 있다. 이건 제품 설명이 아니라 고지다.
              */}
             <p>테스트 결제입니다. 카드 정보를 받지 않으며 실제로 청구되지 않습니다.</p>
           </div>

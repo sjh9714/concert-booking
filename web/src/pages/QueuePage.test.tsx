@@ -45,7 +45,7 @@ type StreamAttempt = {
  * 대기실이 "무엇을 기다리는지"(공연명·회차)를 보여주면서 react-query를 쓰게 됐다.
  * 그 조회는 대기열과 무관하고 실패해도 화면은 그대로 돌지만, 제공자는 있어야 한다.
  *
- * 재시도를 끈다 — 이 테스트에서 공연 조회는 어차피 붙지 않고,
+ * 재시도를 끈다. 이 테스트에서 공연 조회는 어차피 붙지 않고,
  * 켜 두면 실패한 조회가 배경에서 계속 돌아 테스트가 느려진다.
  */
 function renderQueue(): void {
@@ -79,7 +79,7 @@ describe("QueuePage SSE lifecycle", () => {
      * 경로마다 다른 것을 돌려준다. 전에는 무엇을 물어도 대기열 응답을 돌려줬는데,
      * 대기실이 공연·회차도 조회하게 되면서 회차 목록 자리에 객체가 와
      * `.find`가 함수가 아니라는 오류가 났다. 진짜 apiFetch는 스키마로 검증하므로
-     * 이런 응답이 나올 수 없다 — mock이 실제와 달랐던 것이다.
+     * 이런 응답이 나올 수 없다. mock이 실제와 달랐던 것이다.
      */
     mocks.apiFetch.mockImplementation((path: string) => {
       if (path.includes("/schedules")) return Promise.resolve([]);

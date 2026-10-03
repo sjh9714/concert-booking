@@ -33,7 +33,7 @@ import java.util.UUID;
  *
  * <p>규모가 화면을 결정한다. 전에는 회차당 50석(VIP 10 · A 20 · B 20)이라
  * 좌석표가 한 줄 10칸으로 끝났고, 실제 예매 화면이 아니라 테스트 픽스처처럼 보였다.
- * 그래서 공연장 하나를 제대로 짓는다 — 구역 4개 436석.
+ * 그래서 공연장 하나를 제대로 짓는다. 구역 4개 436석.
  *
  * <p>그리고 <b>일부는 이미 팔려 있어야 한다.</b> 전 좌석이 비어 있는 예매 화면은
  * 존재하지 않는다. 좋은 자리부터 빠지고, 공연이 가까울수록 많이 빠진다.
@@ -65,7 +65,7 @@ public class DataInitializer implements ApplicationRunner {
 
     /**
      * 공연장 배치. 무대에서 멀어질수록 넓어지고 싸진다.
-     * 합계 436석 — 좌석표가 한 화면에 담기면서도 '진짜 공연장'으로 읽히는 크기다.
+     * 합계 436석: 좌석표가 한 화면에 담기면서도 '진짜 공연장'으로 읽히는 크기다.
      */
     private static final List<Tier> HALL = List.of(
             new Tier("VIP", 3, 12, 150_000),
@@ -88,7 +88,7 @@ public class DataInitializer implements ApplicationRunner {
 
         int schedules = 0;
         schedules += createConcert(
-                "NOCTURNE — SEOUL",
+                "NOCTURNE: SEOUL",
                 "빛과 리듬으로 구성한 야간 라이브 세션",
                 "아르코 아레나", "Studio Lune",
                 new int[] {7, 8}, new LocalTime[] {LocalTime.of(19, 0), LocalTime.of(18, 0)});
@@ -119,7 +119,7 @@ public class DataInitializer implements ApplicationRunner {
                 "올림픽공원 올림픽홀", "여러 아티스트",
                 new int[] {42, 43}, new LocalTime[] {LocalTime.of(18, 0), LocalTime.of(17, 0)});
 
-        log.info("데모 데이터 초기화 완료 — 공연 6개 · 회차 {}개 · 회차당 {}석", schedules, HALL_TOTAL);
+        log.info("데모 데이터 초기화 완료: 공연 6개 · 회차 {}개 · 회차당 {}석", schedules, HALL_TOTAL);
     }
 
     private void ensureDemoAccount() {
@@ -167,7 +167,7 @@ public class DataInitializer implements ApplicationRunner {
      * 이미 팔린 좌석을 만든다.
      *
      * <p>무작위로 흩뿌리지 않는다. 실제 예매는 좋은 자리부터 빠지고, 공연이 가까울수록
-     * 많이 빠진다. 그 두 가지를 그대로 규칙으로 쓴다 — VIP가 가장 많이 팔리고
+     * 많이 빠진다. 그 두 가지를 그대로 규칙으로 쓴다. VIP가 가장 많이 팔리고
      * 뒤로 갈수록 덜 팔린다.
      *
      * <p>시드를 회차 id로 고정해 다시 띄워도 같은 좌석표가 나오게 한다.
@@ -177,7 +177,7 @@ public class DataInitializer implements ApplicationRunner {
      */
     private int markSold(List<Seat> seats, ConcertSchedule schedule) {
         long daysAway = ChronoUnit.DAYS.between(LocalDate.now(), schedule.getScheduleDate());
-        // 가까운 공연일수록 많이 팔린다 — 7일 뒤 약 61%, 42일 뒤 약 26%
+        // 가까운 공연일수록 많이 팔린다. 7일 뒤 약 61%, 42일 뒤 약 26%
         double base = Math.max(0.22, 0.68 - daysAway * 0.01);
 
         Random random = new Random(schedule.getId() == null ? 0 : schedule.getId());

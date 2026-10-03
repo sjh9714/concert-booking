@@ -2,7 +2,7 @@
  * 공연 배너 일러스트를 만든다.
  *
  * 목록 위 캐러셀에 들어가는 3:1 배너다. NOL 티켓을 재 보면 배너는 1425×463(3.08:1)이고,
- * **글자까지 구워진 일러스트 한 장**이다 — 활성 슬라이드의 텍스트 노드가 0개고
+ * **글자까지 구워진 일러스트 한 장**이다. 활성 슬라이드의 텍스트 노드가 0개고
  * `<img alt="뮤지컬 〈광화문연가〉">` 하나뿐이었다(web/DESIGN.md).
  *
  * **포스터와 성격이 다르다.** 포스터는 Pexels 실사 사진이지만(`fetch-posters.mjs`)
@@ -12,7 +12,7 @@
  *
  * **글자는 그림에 넣지 않는다.** FLUX의 글자는 신뢰할 수 없고, 화면 낭독기가 읽어야 하고,
  * 어느 배율에서도 선명해야 한다. 대신 주제를 오른쪽에 몰고 왼쪽을 비우게 그려서
- * 그 자리에 HTML 활자를 얹는다 — 이게 "배너 크기로 설계했다"의 실체다.
+ * 그 자리에 HTML 활자를 얹는다. 이게 "배너 크기로 설계했다"의 실체다.
  *
  * 사용법:
  *   node scripts/generate-banners.mjs                 # 없는 것만
@@ -32,7 +32,7 @@ const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../publi
 const ENV_FILE = path.join(homedir(), "Projects/portfolio-backend/.env.local");
 
 const MODEL = "fal-ai/flux/dev";
-/** 3:1 — NOL 실측 3.08:1 */
+/** 3:1: NOL 실측 3.08:1 */
 const RATIO = 3;
 /** 굽는 폭. 배너는 full-bleed라 1x만 있으면 된다 */
 const WIDTHS = [960, 1440, 1920];
@@ -61,7 +61,7 @@ const SUFFIX = [
 const BANNERS = [
   {
     slug: "nocturne-seoul",
-    concert: "NOCTURNE — SEOUL",
+    concert: "NOCTURNE: SEOUL",
     desc: "한밤의 도시 위로 무대 조명이 부챗살처럼 퍼지는 그림",
     prompt:
       "Deep midnight blue and cyan night concert banner. Stylized city skyline silhouette with a glowing domed stage and sweeping light beams fanning into the night sky on the right side. Cool luminous palette",
@@ -149,7 +149,7 @@ async function falJson(url, key, init = {}) {
  * 한 장 생성. 큐에 넣고 끝날 때까지 기다린다.
  *
  * `status_url`과 `response_url`은 **받은 그대로** 쓴다. 제출은 `fal-ai/flux/dev`로 하는데
- * 조회 주소는 `fal-ai/flux/requests/{id}`로 내려온다 — 모델 경로에서 변형이 빠진다.
+ * 조회 주소는 `fal-ai/flux/requests/{id}`로 내려온다. 모델 경로에서 변형이 빠진다.
  * 직접 조립하면 404가 난다(finmate-api FalArtProvider의 주석).
  */
 async function generate(prompt, key) {
@@ -180,7 +180,7 @@ async function generate(prompt, key) {
       throw new Error("3분 안에 끝나지 않았습니다");
     } catch (error) {
       lastError = error;
-      console.log(`  ${size.width}×${size.height} 실패 (${error.message}) — 더 작은 크기로 재시도`);
+      console.log(`  ${size.width}×${size.height} 실패 (${error.message}): 더 작은 크기로 재시도`);
     }
   }
   throw lastError;
@@ -197,7 +197,7 @@ if (only && targets.length === 0) {
 for (const banner of targets) {
   const marker = path.join(OUT, `${banner.slug}-1440.avif`);
   if (!force && (await exists(marker))) {
-    console.log(`· ${banner.slug} 이미 있음 (--force로 다시 생성 — 비용이 듭니다)`);
+    console.log(`· ${banner.slug} 이미 있음 (--force로 다시 생성: 비용이 듭니다)`);
     continue;
   }
 
@@ -213,7 +213,7 @@ for (const banner of targets) {
 
   for (const w of WIDTHS) {
     // 3:1로 맞춘다. 모델이 정확히 3:1을 주지 않을 수 있어 여기서 한 번 더 못 박는다.
-    // 배너는 오른쪽에 주제가 있으므로 가운데를 기준으로 자른다 — attention은 주제를
+    // 배너는 오른쪽에 주제가 있으므로 가운데를 기준으로 자른다. attention은 주제를
     // 가운데로 끌고 와 왼쪽 여백을 없앤다.
     const base = sharp(bytes).resize(w, Math.round(w / RATIO), { fit: "cover", position: "centre" });
     await writeFile(
@@ -242,7 +242,7 @@ await writeFile(
     "",
     "실제 예매 서비스의 배너는 사진을 잘라 넣은 것이 아니라 **배너 비율로 그린 그림**입니다.",
     "NOL 티켓을 재 보면 배너는 1425×463(3.08:1)이고 글자까지 구워진 일러스트 한 장이었습니다",
-    "— 활성 슬라이드의 텍스트 노드가 0개였습니다.",
+    ": 활성 슬라이드의 텍스트 노드가 0개였습니다.",
     "",
     "3:4 세로 사진을 3:1로 자르면 그 흉내가 됩니다. 우리 사진 여섯 장 중 둘은 세로라",
     "잘라 봐야 얇은 띠만 남습니다. 그래서 배너는 배너 비율로 새로 그렸습니다.",
@@ -251,7 +251,7 @@ await writeFile(
     "",
     "공연명·공연장·날짜는 화면에서 **HTML 활자로 얹습니다**. 그래야 화면 낭독기가 읽고,",
     "어느 배율에서도 선명하고, 공연 정보가 바뀌어도 그림을 다시 만들지 않아도 됩니다.",
-    "그림은 주제를 오른쪽에 두고 왼쪽을 비우도록 그렸습니다 — 그 자리가 활자 자리입니다.",
+    "그림은 주제를 오른쪽에 두고 왼쪽을 비우도록 그렸습니다. 그 자리가 활자 자리입니다.",
     "",
     "| 공연 | 그림 |",
     "| --- | --- |",
@@ -259,7 +259,7 @@ await writeFile(
     "",
     "## 생성",
     "",
-    "`node scripts/generate-banners.mjs` — 3:1로 960/1440/1920 폭의 AVIF·WebP로 저장합니다.",
+    "`node scripts/generate-banners.mjs`: 3:1로 960/1440/1920 폭의 AVIF·WebP로 저장합니다.",
     "**비용이 발생하므로** 이미 있으면 건너뜁니다. 다시 만들려면 `--force`,",
     "프롬프트를 시험할 때는 `--only <slug>`로 한 장만 뽑습니다.",
     "",

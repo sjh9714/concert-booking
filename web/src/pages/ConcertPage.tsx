@@ -46,7 +46,7 @@ export function ConcertPage() {
       ? "일정 준비 중"
       : dates[0] === dates[dates.length - 1]
         ? concertDate(dates[0])
-        : `${concertDate(dates[0])} – ${concertDate(dates[dates.length - 1])}`;
+        : `${concertDate(dates[0])} ~ ${concertDate(dates[dates.length - 1])}`;
   const remaining = list.reduce((sum, schedule) => sum + schedule.availableSeats, 0);
   const capacity = list.reduce((sum, schedule) => sum + schedule.totalSeats, 0);
 

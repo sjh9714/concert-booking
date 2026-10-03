@@ -722,7 +722,7 @@ test("배너는 자동으로 넘어가고, 정지를 누르면 멈춘다", async
     .poll(shown, { timeout: 6_000 })
     .not.toBe(first);
 
-  // 정지를 누르면 그 뒤로는 그대로여야 한다 — 이게 없으면 WCAG 2.2.2 위반이다
+  // 정지를 누르면 그 뒤로는 그대로여야 한다. 이게 없으면 WCAG 2.2.2 위반이다
   await banner.getByRole("button", { name: "자동 넘김 정지" }).click();
   const held = await shown();
   await page.waitForTimeout(6_000);
@@ -733,7 +733,7 @@ test("배너는 자동으로 넘어가고, 정지를 누르면 멈춘다", async
 test("배너는 키보드로 넘길 수 있고 마지막에서 처음으로 이어진다", async ({
   page,
 }, testInfo) => {
-  // 좁은 화면에서는 화살표를 감춘다 — 썸네일 6개와 함께 두기엔 자리가 없다
+  // 좁은 화면에서는 화살표를 감춘다. 썸네일 6개와 함께 두기엔 자리가 없다
   skipMobile(testInfo.project.name);
   await page.goto("/");
   const banner = page.getByRole("region", { name: "추천 공연" });
@@ -778,13 +778,13 @@ test("보이지 않는 배너 슬라이드는 탭 순서에 들어가지 않는�
 /*
  * 감소 모션.
  *
- * CSS로 전환 시간만 0으로 만드는 것으로는 부족하다 — 화면이 5초마다 계속 바뀌는 것
+ * CSS로 전환 시간만 0으로 만드는 것으로는 부족하다. 화면이 5초마다 계속 바뀌는 것
  * 자체가 문제다. 자동 전환을 아예 시작하지 않는지 본다.
  */
 test.describe("움직임을 줄이는 설정", () => {
   test("배너가 저절로 넘어가지 않는다", async ({ page }) => {
     /*
-     * `test.use({ reducedMotion })`는 이 설정에서 적용되지 않았다 — 테스트 안에서
+     * `test.use({ reducedMotion })`는 이 설정에서 적용되지 않았다. 테스트 안에서
      * matchMedia가 false였다. 걸리지 않았는데 통과하면 아무것도 지키지 못하므로
      * 화면을 열기 전에 직접 건다. 아래에서 실제로 걸렸는지 한 번 더 단언한다.
      */
@@ -793,7 +793,7 @@ test.describe("움직임을 줄이는 설정", () => {
     const banner = page.getByRole("region", { name: "추천 공연" });
     await expect(banner).toBeVisible();
 
-    // 설정이 실제로 걸렸는지부터 본다 — 안 걸렸는데 통과하면 아무것도 지키지 못한다
+    // 설정이 실제로 걸렸는지부터 본다. 안 걸렸는데 통과하면 아무것도 지키지 못한다
     expect(
       await page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches),
     ).toBe(true);

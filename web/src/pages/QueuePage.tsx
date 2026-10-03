@@ -35,7 +35,7 @@ export function QueuePage() {
 
   /*
    * 무엇을 기다리는지 화면에 적는다. 전에는 순번만 있어서 어느 공연의 대기열인지
-   * 알 수 없었다 — 탭을 두고 자리를 비웠다 돌아오면 더 그렇다.
+   * 알 수 없었다. 탭을 두고 자리를 비웠다 돌아오면 더 그렇다.
    * 대기열 자체와는 무관하므로 실패해도 화면은 그대로 돈다.
    */
   const concert = useQuery({
@@ -72,7 +72,7 @@ export function QueuePage() {
   }, [schedule, session]);
 
   // 진입·재진입 응답을 스트림에 넘긴다. 스트림이 그걸 현재 값으로 받아들이므로
-  // 여기서 둘 중 하나를 고르지 않는다 — 고르게 했더니 폴링이 채운 오래된 값이
+  // 여기서 둘 중 하나를 고르지 않는다. 고르게 했더니 폴링이 채운 오래된 값이
   // 재진입 결과를 덮었다.
   const stream = useQueueStream(schedule, session?.token ?? null, entered !== null, entered);
   const position = stream.position;
@@ -131,7 +131,7 @@ export function QueuePage() {
     <main id="main-content" className="queue-page">
       <div className="queue-meta">
         <p className="label">Waiting Room</p>
-        {/* 연결 상태를 색만으로 말하지 않는다 — 글자로도 적는다 */}
+        {/* 연결 상태를 색만으로 말하지 않는다. 글자로도 적는다 */}
         <span className={`live-state ${transport}`}>
           <i aria-hidden="true" />
           {transport === "live"
@@ -164,7 +164,7 @@ export function QueuePage() {
             ? position.position.toLocaleString("ko-KR")
             : ready
               ? "입장"
-              : "—"}
+              : "-"}
         </strong>
         <p>
           {ready
